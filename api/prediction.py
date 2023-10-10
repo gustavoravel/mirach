@@ -4,13 +4,17 @@ from statsmodels.tsa.stattools import arma_order_select_ic
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 
-# pareamento das colunas
-# exemplo:
+# exemplo dos dados recebidos do front:
 """column_pair = {
-    'item_id': 'Dept',
-    'timestamp': 'Date',
-    'demand': 'Weekly_Sales'
-}"""
+	 'item_id': 'coluna_que_contem_o_id',
+	 'timestamp': 'coluna_que_contem_a_data',
+	 'demand': 'coluna_que_contem_a_demanda',
+	 'dateFrequencyN': 'numero_da_periodicidade_das_datas',  # opções disponíveis: min 1
+	 'dateFrequency': 'periodicidade_das_datas',  # opções disponíveis: hora(s), dia(s), semana(s), mes(es), bimestre(s), trimestre(s), semestre(s), ano(s)
+	 'forecastHorizonN': 'numero_do_horizonte_de_previsão', # opções disponíveis: min 1 max 10
+	 'forecastHorizon': 'horizonte_de_previsão',  # mesma quantidade de períodos da periodicidade das datas
+	 'predictionAlgorithm': 'ETS',  # opções disponíveis: ETS, ARIMA
+"""
 
 
 class ARIMA_Model:
