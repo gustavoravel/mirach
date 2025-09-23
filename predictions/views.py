@@ -10,11 +10,15 @@ from .models import Prediction, PredictionModel
 from .services import PredictionService
 from .tasks import run_prediction_task
 from datasets.models import Dataset
+from projects.models import ProjectMembership
+from .algorithms import create_forecaster
+import numpy as np
 
 
 @login_required
 def prediction_list(request):
-    predictions = Prediction.objects.filter(project__owner=request.user)
+    member_project_ids = ProjectMembership.objects.filter(user=request.user).values_list('project_id', flat=True)
+    predictions = Prediction.objects.filter(project_id__in=member_project_ids)
     return render(request, 'predictions/list.html', {'predictions': predictions})
 
 
@@ -31,9 +35,11 @@ def prediction_create(request):
         
         if all([project_id, dataset_id, model_id, name, prediction_horizon]):
             from projects.models import Project
-            
-            project = get_object_or_404(Project, pk=project_id, owner=request.user)
-            dataset = get_object_or_404(Dataset, pk=dataset_id, project__owner=request.user)
+            project = get_object_or_404(Project, pk=project_id)
+            if not ProjectMembership.objects.filter(project=project, user=request.user, role__in=['owner','editor']).exists():
+                messages.error(request, 'Você não tem permissão para criar previsões neste projeto.')
+                return redirect('predictions:list')
+            dataset = get_object_or_404(Dataset, pk=dataset_id, project=project)
             model = get_object_or_404(PredictionModel, pk=model_id)
             
             # Get model parameters
@@ -68,6 +74,8 @@ def prediction_create(request):
                 model_parameters=model_parameters,
                 created_by=request.user
             )
+            from projects.models import AuditLog
+            AuditLog.objects.create(project=project, user=request.user, action='prediction_create', context={'prediction_id': prediction.id, 'name': prediction.name})
             messages.success(request, 'Previsão criada com sucesso!')
             return redirect('predictions:detail', pk=prediction.pk)
         else:
@@ -75,8 +83,8 @@ def prediction_create(request):
     
     from projects.models import Project
     
-    projects = Project.objects.filter(owner=request.user, is_active=True)
-    datasets = Dataset.objects.filter(project__owner=request.user, status='processed')
+    projects = Project.objects.filter(memberships__user=request.user, is_active=True).distinct()
+    datasets = Dataset.objects.filter(project__memberships__user=request.user, status='processed')
     models = PredictionModel.objects.filter(is_active=True)
     
     return render(request, 'predictions/create.html', {
@@ -88,13 +96,19 @@ def prediction_create(request):
 
 @login_required
 def prediction_detail(request, pk):
-    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a esta previsão.')
+        return redirect('predictions:list')
     return render(request, 'predictions/detail.html', {'prediction': prediction})
 
 
 @login_required
 def prediction_run(request, pk):
-    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Você não tem permissão para executar esta previsão.')
+        return redirect('predictions:list')
     
     if request.method == 'POST':
         # enqueue async job
@@ -106,6 +120,8 @@ def prediction_run(request, pk):
         prediction.estimated_completion = datetime.now() + timedelta(minutes=est_minutes)
         prediction.save()
         run_prediction_task.delay(prediction.id)
+        from projects.models import AuditLog
+        AuditLog.objects.create(project=prediction.project, user=request.user, action='prediction_run', context={'prediction_id': prediction.id})
         messages.success(request, 'Previsão enfileirada! Você será notificado ao concluir.')
         return redirect('predictions:detail', pk=prediction.pk)
     
@@ -114,7 +130,10 @@ def prediction_run(request, pk):
 
 @login_required
 def prediction_results(request, pk):
-    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a esta previsão.')
+        return redirect('predictions:list')
     return render(request, 'predictions/results.html', {'prediction': prediction})
 
 
@@ -188,9 +207,14 @@ def prediction_wizard(request):
 
 @login_required
 def prediction_delete(request, pk):
-    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Você não tem permissão para excluir esta previsão.')
+        return redirect('predictions:list')
     
     if request.method == 'POST':
+        from projects.models import AuditLog
+        AuditLog.objects.create(project=prediction.project, user=request.user, action='prediction_delete', context={'prediction_id': prediction.id})
         prediction.delete()
         messages.success(request, 'Previsão excluída com sucesso!')
         return redirect('predictions:list')
@@ -208,10 +232,11 @@ def prediction_models(request):
 def get_model_recommendations(request, dataset_id):
     """Get model recommendations for a dataset"""
     try:
-        dataset = get_object_or_404(Dataset, pk=dataset_id, project__owner=request.user)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+            return JsonResponse({'success': False, 'error': 'Acesso negado'})
         service = PredictionService()
         result = service.get_model_recommendations(dataset)
-        
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -222,7 +247,9 @@ def compare_models(request, dataset_id):
     """Compare multiple models on a dataset"""
     if request.method == 'POST':
         try:
-            dataset = get_object_or_404(Dataset, pk=dataset_id, project__owner=request.user)
+            dataset = get_object_or_404(Dataset, pk=dataset_id)
+            if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+                return JsonResponse({'success': False, 'error': 'Acesso negado'})
             models = request.POST.getlist('models')
             train_size = float(request.POST.get('train_size', 0.8))
             
@@ -240,7 +267,9 @@ def compare_models(request, dataset_id):
 def backtest(request, dataset_id):
     """Run a simple rolling-origin backtest and return JSON metrics"""
     try:
-        dataset = get_object_or_404(Dataset, pk=dataset_id, project__owner=request.user)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+            return JsonResponse({'success': False, 'error': 'Acesso negado'})
         models = request.GET.getlist('models') or ['arima', 'ets', 'prophet']
         train_size = float(request.GET.get('train_size', 0.7))
         horizon = int(request.GET.get('horizon', 6))
@@ -283,7 +312,9 @@ def backtest(request, dataset_id):
 def get_visualization_data(request, pk):
     """Get visualization data for a prediction"""
     try:
-        prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+        prediction = get_object_or_404(Prediction, pk=pk)
+        if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+            return JsonResponse({'error': 'Acesso negado'})
         service = PredictionService()
         result = service.create_visualization_data(prediction)
         
@@ -296,7 +327,9 @@ def get_visualization_data(request, pk):
 def prediction_status(request, pk):
     """Get prediction status (for AJAX polling)"""
     try:
-        prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+        prediction = get_object_or_404(Prediction, pk=pk)
+        if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+            return JsonResponse({'error': 'Acesso negado'})
         return JsonResponse({
             'status': prediction.status,
             'progress': prediction.progress if hasattr(prediction, 'progress') else 0,
@@ -309,7 +342,9 @@ def prediction_status(request, pk):
 
 @login_required
 def export_results_csv(request, pk):
-    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        return JsonResponse({'error': 'Acesso negado'})
     import csv
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="prediction_{pk}_results.csv"'
@@ -322,7 +357,9 @@ def export_results_csv(request, pk):
 
 @login_required
 def export_results_json(request, pk):
-    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        return JsonResponse({'error': 'Acesso negado'})
     data = [
         {
             'timestamp': r.timestamp.isoformat(),

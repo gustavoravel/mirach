@@ -3,11 +3,14 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Dataset, ColumnMapping
 from django.http import JsonResponse
+from projects.models import ProjectMembership, Project
 
 
 @login_required
 def dataset_list(request):
-    datasets = Dataset.objects.filter(project__owner=request.user)
+    # Datasets de projetos onde o usuário é membro
+    member_project_ids = ProjectMembership.objects.filter(user=request.user).values_list('project_id', flat=True)
+    datasets = Dataset.objects.filter(project_id__in=member_project_ids)
     return render(request, 'datasets/list.html', {'datasets': datasets})
 
 
@@ -18,10 +21,14 @@ def dataset_upload(request):
         file = request.FILES.get('file')
         
         if project_id and file:
-            from projects.models import Project
             from .utils import process_excel_file, detect_time_series_columns, validate_time_series_data
             
-            project = get_object_or_404(Project, pk=project_id, owner=request.user)
+            project = get_object_or_404(Project, pk=project_id)
+            # Permissão: editor/owner
+            membership = ProjectMembership.objects.filter(project=project, user=request.user, role__in=['owner','editor']).exists()
+            if not membership:
+                messages.error(request, 'Você não tem permissão para enviar datasets neste projeto.')
+                return redirect('datasets:list')
             
             # Processar o arquivo Excel
             result = process_excel_file(file)
@@ -37,7 +44,10 @@ def dataset_upload(request):
                     column_names=result['column_names'],
                     status='uploaded'
                 )
-                
+                # Audit
+                from projects.models import AuditLog
+                AuditLog.objects.create(project=project, user=request.user, action='dataset_upload', context={'dataset_id': dataset.id, 'name': dataset.name})
+
                 # Criar sugestões de mapeamento de colunas
                 suggestions = detect_time_series_columns(result['dataframe'])
                 for col_name, col_type in suggestions.items():
@@ -74,13 +84,20 @@ def dataset_upload(request):
 
 @login_required
 def dataset_detail(request, pk):
-    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    dataset = get_object_or_404(Dataset, pk=pk)
+    # Permissão: viewer+ (membro)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a este dataset.')
+        return redirect('datasets:list')
     return render(request, 'datasets/detail.html', {'dataset': dataset})
 
 
 @login_required
 def dataset_edit(request, pk):
-    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Você não tem permissão para editar este dataset.')
+        return redirect('datasets:list')
     
     if request.method == 'POST':
         dataset.name = request.POST.get('name', dataset.name)
@@ -94,7 +111,10 @@ def dataset_edit(request, pk):
 
 @login_required
 def dataset_delete(request, pk):
-    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Você não tem permissão para excluir este dataset.')
+        return redirect('datasets:list')
     
     if request.method == 'POST':
         dataset.delete()
@@ -106,7 +126,10 @@ def dataset_delete(request, pk):
 
 @login_required
 def column_mapping(request, pk):
-    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Você não tem permissão para processar este dataset.')
+        return redirect('datasets:list')
     
     if request.method == 'POST':
         # Process column mappings

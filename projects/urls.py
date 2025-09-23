@@ -9,4 +9,6 @@ urlpatterns = [
     path('<int:pk>/', views.project_detail, name='detail'),
     path('<int:pk>/edit/', views.project_edit, name='edit'),
     path('<int:pk>/delete/', views.project_delete, name='delete'),
+    path('<int:pk>/invite/', views.project_invite, name='invite'),
+    path('invite/accept/<str:token>/', views.accept_invite, name='accept_invite'),
 ]

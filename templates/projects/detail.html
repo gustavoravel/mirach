@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+
+{% block title %}Projeto - Mirach{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h2 class="text-gradient mb-2"><i class="fas fa-project-diagram me-2"></i>{{ project.name }}</h2>
+    <p class="text-muted mb-0">{{ project.description }}</p>
+  </div>
+  <a href="{% url 'projects:edit' project.pk %}" class="btn btn-outline-secondary">Editar</a>
+</div>
+
+<div class="row">
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><strong>Membros</strong></div>
+      <div class="card-body">
+        <ul class="list-group">
+        {% for m in members %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            {{ m.user.email|default:m.user.username }}
+            <span class="badge bg-secondary">{{ m.role }}</span>
+          </li>
+        {% empty %}
+          <li class="list-group-item">Nenhum membro</li>
+        {% endfor %}
+        </ul>
+        <form class="mt-3" action="{% url 'projects:invite' project.pk %}" method="post">
+          {% csrf_token %}
+          <div class="row g-2">
+            <div class="col-md-7"><input type="email" name="email" class="form-control" placeholder="email@empresa.com" required></div>
+            <div class="col-md-3">
+              <select name="role" class="form-select">
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+              </select>
+            </div>
+            <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Convidar</button></div>
+          </div>
+        </form>
+        {% if invites %}
+        <div class="mt-3">
+          <small class="text-muted">Convites pendentes:</small>
+          <ul class="small mb-0">
+          {% for i in invites %}
+            <li>{{ i.email }} ({{ i.role }})</li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header"><strong>Auditoria (últimos 50)</strong></div>
+      <div class="card-body">
+        <ul class="list-group">
+        {% for log in logs %}
+          <li class="list-group-item d-flex justify-content-between align-items-center">
+            <span>
+              <strong>{{ log.action }}</strong> — {{ log.context }}
+            </span>
+            <small class="text-muted">{{ log.created_at|date:"d/m/Y H:i" }}</small>
+          </li>
+        {% empty %}
+          <li class="list-group-item">Sem eventos ainda.</li>
+        {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+

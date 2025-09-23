@@ -1,12 +1,16 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Project
+from .models import Project, ProjectMembership, ProjectInvitation, AuditLog
+from django.http import JsonResponse
+from django.utils import timezone
+from django.contrib.auth.models import User
+from django.urls import reverse
 
 
 @login_required
 def project_list(request):
-    projects = Project.objects.filter(owner=request.user, is_active=True)
+    projects = Project.objects.filter(memberships__user=request.user, is_active=True).distinct()
     return render(request, 'projects/list.html', {'projects': projects})
 
 
@@ -22,6 +26,7 @@ def project_create(request):
                 description=description,
                 owner=request.user
             )
+            ProjectMembership.objects.get_or_create(project=project, user=request.user, defaults={'role': 'owner'})
             messages.success(request, 'Projeto criado com sucesso!')
             return redirect('projects:detail', pk=project.pk)
         else:
@@ -32,8 +37,14 @@ def project_create(request):
 
 @login_required
 def project_detail(request, pk):
-    project = get_object_or_404(Project, pk=pk, owner=request.user)
-    return render(request, 'projects/detail.html', {'project': project})
+    project = get_object_or_404(Project, pk=pk)
+    if not ProjectMembership.objects.filter(project=project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a este projeto.')
+        return redirect('projects:list')
+    members = ProjectMembership.objects.filter(project=project).select_related('user')
+    invites = ProjectInvitation.objects.filter(project=project, is_active=True)
+    logs = AuditLog.objects.filter(project=project)[:50]
+    return render(request, 'projects/detail.html', {'project': project, 'members': members, 'invites': invites, 'logs': logs})
 
 
 @login_required
@@ -61,3 +72,47 @@ def project_delete(request, pk):
         return redirect('projects:list')
     
     return render(request, 'projects/delete.html', {'project': project})
+
+
+@login_required
+def project_invite(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    if not ProjectMembership.objects.filter(project=project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Apenas owner/editor podem convidar membros.')
+        return redirect('projects:detail', pk=pk)
+
+    if request.method == 'POST':
+        email = request.POST.get('email', '').strip().lower()
+        role = request.POST.get('role', 'viewer')
+        if not email:
+            messages.error(request, 'E-mail é obrigatório.')
+            return redirect('projects:detail', pk=pk)
+        invite = ProjectInvitation.objects.create(project=project, email=email, role=role, invited_by=request.user)
+        # Enviar e-mail
+        from django.core.mail import send_mail
+        from django.conf import settings
+        accept_url = request.build_absolute_uri(reverse('projects:accept_invite', args=[invite.token]))
+        send_mail(
+            subject=f"Convite para o projeto {project.name}",
+            message=f"Você foi convidado para o projeto {project.name}. Acesse: {accept_url}",
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@mirach.local'),
+            recipient_list=[email],
+            fail_silently=True
+        )
+        messages.success(request, 'Convite enviado!')
+        return redirect('projects:detail', pk=pk)
+
+    return redirect('projects:detail', pk=pk)
+
+
+@login_required
+def accept_invite(request, token):
+    invite = get_object_or_404(ProjectInvitation, token=token, is_active=True)
+    # Vincular usuário atual ao projeto
+    ProjectMembership.objects.get_or_create(project=invite.project, user=request.user, defaults={'role': invite.role})
+    invite.accepted_by = request.user
+    invite.accepted_at = timezone.now()
+    invite.is_active = False
+    invite.save()
+    messages.success(request, f'Você entrou no projeto {invite.project.name} como {invite.role}.')
+    return redirect('projects:detail', pk=invite.project.pk)
