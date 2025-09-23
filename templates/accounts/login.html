@@ -3,33 +3,49 @@
 {% block title %}Login - Mirach{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-4">
-        <div class="card">
-            <div class="card-header text-center">
-                <h4><i class="fas fa-star"></i> Mirach</h4>
-                <p class="mb-0">Faça login em sua conta</p>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label for="id_username" class="form-label">Usuário</label>
-                        <input type="text" class="form-control" id="id_username" name="username" required>
+<div class="min-vh-100 d-flex align-items-center justify-content-center">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="card shadow-lg border-0">
+                    <div class="card-header text-center py-4" style="background: var(--primary-gradient); color: white;">
+                        <div class="mb-3">
+                            <i class="fas fa-star fa-3x"></i>
+                        </div>
+                        <h3 class="mb-2">Bem-vindo de volta!</h3>
+                        <p class="mb-0 opacity-75">Faça login em sua conta Mirach</p>
                     </div>
-                    <div class="mb-3">
-                        <label for="id_password" class="form-label">Senha</label>
-                        <input type="password" class="form-control" id="id_password" name="password" required>
+                    <div class="card-body p-5">
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="mb-4">
+                                <label for="id_username" class="form-label">
+                                    <i class="fas fa-user me-2"></i>Usuário
+                                </label>
+                                <input type="text" class="form-control form-control-lg" id="id_username" name="username" 
+                                       placeholder="Digite seu usuário" required>
+                            </div>
+                            <div class="mb-4">
+                                <label for="id_password" class="form-label">
+                                    <i class="fas fa-lock me-2"></i>Senha
+                                </label>
+                                <input type="password" class="form-control form-control-lg" id="id_password" name="password" 
+                                       placeholder="Digite sua senha" required>
+                            </div>
+                            <div class="d-grid mb-4">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-sign-in-alt me-2"></i>Entrar
+                                </button>
+                            </div>
+                        </form>
+                        <div class="text-center">
+                            <p class="mb-0 text-muted">Não tem uma conta?</p>
+                            <a href="{% url 'accounts:signup' %}" class="btn btn-outline-primary mt-2">
+                                <i class="fas fa-user-plus me-2"></i>Criar Conta Grátis
+                            </a>
+                        </div>
                     </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-sign-in-alt"></i> Entrar
-                        </button>
-                    </div>
-                </form>
-            </div>
-            <div class="card-footer text-center">
-                <p class="mb-0">Não tem uma conta? <a href="{% url 'accounts:signup' %}">Cadastre-se</a></p>
+                </div>
             </div>
         </div>
     </div>

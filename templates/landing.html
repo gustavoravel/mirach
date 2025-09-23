@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Mirach - Previsão de Séries Temporais Inteligente{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="container">
+        <div class="row align-items-center min-vh-100">
+            <div class="col-lg-6">
+                <div class="hero-content">
+                    <h1 class="hero-title">
+                        <span class="text-gradient">Mirach</span><br>
+                        Pare de Adivinhar.<br>
+                        <span class="hero-subtitle">Comece a Prever.</span>
+                    </h1>
+                    <p class="hero-description">
+                        Você está cansado de depender de métodos de previsão ultrapassados e palpites 
+                        para prever suas vendas e demanda? O Mirach é a ferramenta revolucionária que 
+                        ajuda empresas de todos os tamanhos a tomar decisões informadas e planejar o futuro.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="{% url 'accounts:signup' %}" class="btn btn-primary btn-lg me-3">
+                            <i class="fas fa-rocket"></i> Começar Grátis
+                        </a>
+                        <a href="#features" class="btn btn-outline-primary btn-lg">
+                            <i class="fas fa-play"></i> Ver Demo
+                        </a>
+                    </div>
+                    <div class="hero-stats">
+                        <div class="stat-item">
+                            <span class="stat-number">+20%</span>
+                            <span class="stat-label">Aumento nas Vendas</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">95%</span>
+                            <span class="stat-label">Precisão nas Previsões</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number">5min</span>
+                            <span class="stat-label">Setup Completo</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="hero-visual">
+                    <div class="floating-card card-1">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Vendas</span>
+                    </div>
+                    <div class="floating-card card-2">
+                        <i class="fas fa-dollar-sign"></i>
+                        <span>Receita</span>
+                    </div>
+                    <div class="floating-card card-3">
+                        <i class="fas fa-trending-up"></i>
+                        <span>Crescimento</span>
+                    </div>
+                    <div class="floating-card card-4">
+                        <i class="fas fa-target"></i>
+                        <span>Precisão</span>
+                    </div>
+                    <div class="hero-chart">
+                        <canvas id="heroChart" width="400" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<section id="features" class="features-section py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-12 text-center mb-5">
+                <h2 class="section-title">
+                    <span class="text-gradient">Por Que Escolher o Mirach?</span>
+                </h2>
+                <p class="section-subtitle">
+                    Descubra como nossa plataforma pode transformar seu negócio com previsões precisas
+                </p>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <h5 class="card-title">Previsões Precisas</h5>
+                        <p class="card-text">
+                            Com o Mirach, você pode aproveitar nossos algoritmos avançados e 
+                            insights baseados em dados para obter previsões precisas nas quais pode confiar.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-user-friendly"></i>
+                        </div>
+                        <h5 class="card-title">Fácil de Usar</h5>
+                        <p class="card-text">
+                            Nossa plataforma é intuitiva e fácil de usar, então você pode começar 
+                            rapidamente, mesmo sem experiência em análise de dados.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <h5 class="card-title">Aumente Suas Vendas</h5>
+                        <p class="card-text">
+                            Empresas usando o Mirach viram um aumento médio de 20% em suas 
+                            previsões de vendas e demanda. São 20% extras de receita que você 
+                            poderia estar ganhando agora.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                        <h5 class="card-title">Setup em 5 Minutos</h5>
+                        <p class="card-text">
+                            Comece a fazer previsões profissionais em menos de 5 minutos. 
+                            Simplesmente faça upload dos seus dados e deixe nossa IA fazer o resto.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-headset"></i>
+                        </div>
+                        <h5 class="card-title">Suporte Dedicado</h5>
+                        <p class="card-text">
+                            Você terá acesso aos nossos recursos de suporte abrangentes e 
+                            equipe de atendimento ao cliente dedicada para ajudá-lo a cada passo.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="feature-card card h-100">
+                    <div class="card-body text-center">
+                        <div class="feature-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h5 class="card-title">Dados Seguros</h5>
+                        <p class="card-text">
+                            Seus dados são protegidos com criptografia de nível bancário e 
+                            nunca são compartilhados com terceiros. Sua privacidade é nossa prioridade.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Results Section -->
+<section class="algorithms-section py-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-12 text-center mb-5">
+                <h2 class="section-title">
+                    <span class="text-gradient">Resultados Comprovados</span>
+                </h2>
+                <p class="section-subtitle">
+                    Veja como empresas estão transformando seus negócios com o Mirach
+                </p>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-4 col-md-6">
+                <div class="algorithm-card">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Vendas de E-commerce</span>
+                    <small>+25% precisão</small>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="algorithm-card">
+                    <i class="fas fa-warehouse"></i>
+                    <span>Gestão de Estoque</span>
+                    <small>-30% desperdício</small>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="algorithm-card">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Demanda Sazonal</span>
+                    <small>+40% eficiência</small>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="algorithm-card">
+                    <i class="fas fa-industry"></i>
+                    <span>Produção Industrial</span>
+                    <small>+18% otimização</small>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="algorithm-card">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Retail</span>
+                    <small>+22% vendas</small>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6">
+                <div class="algorithm-card">
+                    <i class="fas fa-plane"></i>
+                    <span>Turismo</span>
+                    <small>+35% ocupação</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Testimonial -->
+        <div class="row mt-5">
+            <div class="col-lg-8 mx-auto">
+                <div class="testimonial-card">
+                    <div class="testimonial-content">
+                        <i class="fas fa-quote-left"></i>
+                        <p class="testimonial-text">
+                            "O Mirach revolucionou nossa capacidade de prever demanda. Em apenas 3 meses, 
+                            reduzimos nosso estoque em 30% e aumentamos as vendas em 20%. É impressionante!"
+                        </p>
+                        <div class="testimonial-author">
+                            <strong>Maria Silva</strong>
+                            <span>CEO, TechCorp Brasil</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- CTA Section -->
+<section class="cta-section py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 text-center">
+                <div class="cta-card card">
+                    <div class="card-body">
+                        <h3 class="cta-title">
+                            <span class="text-gradient">Pronto para Levar Suas Previsões ao Próximo Nível?</span>
+                        </h3>
+                        <p class="cta-description">
+                            Com o Mirach, você pode. Mas não espere! Estamos oferecendo acesso à nossa 
+                            versão beta e as vagas estão se esgotando rapidamente.
+                        </p>
+                        <div class="cta-buttons">
+                            <a href="{% url 'accounts:signup' %}" class="btn btn-primary btn-lg me-3">
+                                <i class="fas fa-rocket"></i> Garantir Minha Vaga Agora
+                            </a>
+                            <a href="{% url 'accounts:login' %}" class="btn btn-outline-primary btn-lg">
+                                <i class="fas fa-sign-in-alt"></i> Já Tenho Conta
+                            </a>
+                        </div>
+                        <div class="urgency-box">
+                            <p class="urgency-text">
+                                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                <strong>Últimas vagas disponíveis!</strong> Junte-se às empresas que já estão 
+                                colhendo os benefícios de previsões precisas com o Mirach.
+                            </p>
+                        </div>
+                        <p class="cta-note">
+                            <i class="fas fa-check-circle text-success"></i>
+                            Sem cartão de crédito • Sempre gratuito • Setup em 5 minutos
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// Hero Chart Animation
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('heroChart').getContext('2d');
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'],
+            datasets: [{
+                label: 'Vendas Históricas',
+                data: [45000, 52000, 38000, 61000, 48000, 55000, 72000, 68000, 75000, 82000, 78000, 85000],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Previsão Mirach',
+                data: [null, null, null, null, null, null, null, null, null, null, 78000, 85000, 92000, 98000, 105000],
+                borderColor: '#f5576c',
+                backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                borderDash: [5, 5],
+                tension: 0.4,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        callback: function(value) {
+                            return 'R$ ' + value.toLocaleString('pt-BR');
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    },
+                    ticks: {
+                        color: 'rgba(255, 255, 255, 0.8)'
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    radius: 0
+                }
+            }
+        }
+    });
+    
+    // Animate chart on load
+    setTimeout(() => {
+        chart.update('active');
+    }, 1000);
+});
+</script>
+{% endblock %}

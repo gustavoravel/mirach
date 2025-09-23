@@ -26,7 +26,7 @@ urlpatterns = [
     path('projects/', include('projects.urls')),
     path('datasets/', include('datasets.urls')),
     path('predictions/', include('predictions.urls')),
-    path('', lambda request: redirect('projects:list')),  # Home page redirects to projects
+    path('', include('accounts.urls')),  # Landing page and auth
 ]
 
 # Serve media files in development
