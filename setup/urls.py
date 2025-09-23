@@ -19,6 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.shortcuts import redirect, render
+from .views_admin import saas_dashboard
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,6 +29,7 @@ urlpatterns = [
     path('predictions/', include('predictions.urls')),
     path('', include('accounts.urls')),  # Landing page and auth
     path('docs/', lambda request: render(request, 'docs.html'), name='docs'),
+    path('admin/saas/', saas_dashboard, name='saas_dashboard'),
 ]
 
 # Serve media files in development

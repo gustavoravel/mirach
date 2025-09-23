@@ -1,0 +1,60 @@
+{% extends 'admin/base_site.html' %}
+{% block title %}SaaS Dashboard{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <h1>SaaS Dashboard</h1>
+  <form method="get" class="mb-3">
+    <div class="btn-group" role="group">
+      <button name="range" value="7d" class="btn btn-sm {% if range=='7d' %}btn-primary{% else %}btn-outline-primary{% endif %}">7d</button>
+      <button name="range" value="30d" class="btn btn-sm {% if range=='30d' %}btn-primary{% else %}btn-outline-primary{% endif %}">30d</button>
+      <button name="range" value="90d" class="btn btn-sm {% if range=='90d' %}btn-primary{% else %}btn-outline-primary{% endif %}">90d</button>
+    </div>
+  </form>
+  <div class="row">
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">North Star ({{ range }})</div><div class="h4">{{ useful_predictions }}</div></div></div>
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">Ativação (48h)</div><div class="h4">{{ activation_rate_48h|floatformat:1 }}%</div></div></div>
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">DAU</div><div class="h4">{{ dau }}</div></div></div>
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">WAU</div><div class="h4">{{ wau }}</div></div></div>
+  </div>
+  <div class="row">
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">RMSE médio ({{ range }})</div><div class="h5">{{ avg_rmse }}</div></div></div>
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">MAPE médio ({{ range }})</div><div class="h5">{{ avg_mape }}%</div></div></div>
+    <div class="col-md-3"><div class="card p-3 mb-3"><div class="small text-muted">Previsões ({{ range }})</div><div class="h5">{{ predictions_count }}</div></div></div>
+  </div>
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card p-3 mb-3">
+        <div class="h6">Top Projetos por Previsões ({{ range }})</div>
+        <table class="table table-sm">
+          <thead><tr><th>Projeto</th><th class="text-end">Previsões</th></tr></thead>
+          <tbody>
+            {% for p in top_projects %}
+            <tr><td>{{ p.project__name }} (#{{ p.project__id }})</td><td class="text-end">{{ p.cnt }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-muted">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card p-3 mb-3">
+        <div class="h6">Distribuição de Planos</div>
+        <table class="table table-sm">
+          <thead><tr><th>Plano</th><th class="text-end">Assinaturas ativas</th></tr></thead>
+          <tbody>
+            {% for r in plans_distribution %}
+            <tr><td>{{ r.plan__name }} ({{ r.plan__code }})</td><td class="text-end">{{ r.n }}</td></tr>
+            {% empty %}
+            <tr><td colspan="2" class="text-muted">Sem dados</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <p class="text-muted">Obs.: métricas de qualidade e unidade econômica simplificadas (agregações rápidas). Podemos evoluir para medianas exatas e custo por previsão.</p>
+</div>
+{% endblock %}
+
+
