@@ -18,7 +18,7 @@ def dataset_upload(request):
         
         if project_id and file:
             from projects.models import Project
-            from .utils import process_excel_file, detect_time_series_columns
+            from .utils import process_excel_file, detect_time_series_columns, validate_time_series_data
             
             project = get_object_or_404(Project, pk=project_id, owner=request.user)
             
@@ -34,7 +34,7 @@ def dataset_upload(request):
                     total_rows=result['total_rows'],
                     total_columns=result['total_columns'],
                     column_names=result['column_names'],
-                    status='processed'
+                    status='uploaded'
                 )
                 
                 # Criar sugestões de mapeamento de colunas
@@ -47,7 +47,19 @@ def dataset_upload(request):
                         data_type=result['column_types'].get(col_name, 'unknown')
                     )
                 
-                messages.success(request, 'Dataset carregado e processado com sucesso!')
+                # Validação básica automática (se encontrar timestamp/target sugeridos)
+                suggested_timestamp = next((c for c, t in suggestions.items() if t == 'timestamp'), None)
+                suggested_target = next((c for c, t in suggestions.items() if t == 'target'), None)
+                if suggested_timestamp and suggested_target:
+                    validation = validate_time_series_data(result['dataframe'].copy(), suggested_timestamp, suggested_target)
+                    if not validation['valid']:
+                        messages.warning(request, 'Dados carregados com avisos/erros. Ajuste o mapeamento de colunas.')
+                    else:
+                        dataset.status = 'processed'
+                        dataset.save(update_fields=['status'])
+                        messages.success(request, 'Dataset carregado e validado com sucesso!')
+                else:
+                    messages.info(request, 'Dataset carregado. Confirme o mapeamento de colunas para processar.')
                 return redirect('datasets:detail', pk=dataset.pk)
             else:
                 messages.error(request, f'Erro ao processar arquivo: {result["error"]}')

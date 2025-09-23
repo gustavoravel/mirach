@@ -4,11 +4,12 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import UserProfile
+from .forms import EmailUserCreationForm
 
 
 def signup(request):
     if request.method == 'POST':
-        form = UserCreationForm(request.POST)
+        form = EmailUserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
             # Create user profile
@@ -17,7 +18,7 @@ def signup(request):
             messages.success(request, 'Conta criada com sucesso!')
             return redirect('projects:list')
     else:
-        form = UserCreationForm()
+        form = EmailUserCreationForm()
     return render(request, 'accounts/signup.html', {'form': form})
 
 

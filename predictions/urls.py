@@ -6,6 +6,7 @@ app_name = 'predictions'
 urlpatterns = [
     path('', views.prediction_list, name='list'),
     path('create/', views.prediction_create, name='create'),
+    path('wizard/', views.prediction_wizard, name='wizard'),
     path('<int:pk>/', views.prediction_detail, name='detail'),
     path('<int:pk>/run/', views.prediction_run, name='run'),
     path('<int:pk>/results/', views.prediction_results, name='results'),
@@ -17,4 +18,6 @@ urlpatterns = [
     path('api/compare/<int:dataset_id>/', views.compare_models, name='compare'),
     path('api/visualization/<int:pk>/', views.get_visualization_data, name='visualization'),
     path('api/status/<int:pk>/', views.prediction_status, name='status'),
+    path('api/export/<int:pk>/csv/', views.export_results_csv, name='export_csv'),
+    path('api/export/<int:pk>/json/', views.export_results_json, name='export_json'),
 ]

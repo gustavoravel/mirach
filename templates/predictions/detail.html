@@ -60,14 +60,14 @@
                 <div class="info-item mb-3">
                     <strong>Divisão dos Dados:</strong><br>
                     <div class="progress mb-1" style="height: 8px;">
-                        <div class="progress-bar bg-primary" style="width: {{ prediction.train_size|floatformat:0|add:0 }}%"></div>
-                        <div class="progress-bar bg-warning" style="width: {{ prediction.validation_size|floatformat:0|add:0 }}%"></div>
-                        <div class="progress-bar bg-info" style="width: {{ prediction.test_size|floatformat:0|add:0 }}%"></div>
+                        <div class="progress-bar bg-primary" style="width: {% widthratio prediction.train_size 1 100 %}%"></div>
+                        <div class="progress-bar bg-warning" style="width: {% widthratio prediction.validation_size 1 100 %}%"></div>
+                        <div class="progress-bar bg-info" style="width: {% widthratio prediction.test_size 1 100 %}%"></div>
                     </div>
                     <small class="text-muted">
-                        Treino: {{ prediction.train_size|floatformat:0|add:0 }}% | 
-                        Validação: {{ prediction.validation_size|floatformat:0|add:0 }}% | 
-                        Teste: {{ prediction.test_size|floatformat:0|add:0 }}%
+                        Treino: {% widthratio prediction.train_size 1 100 %}% | 
+                        Validação: {% widthratio prediction.validation_size 1 100 %}% | 
+                        Teste: {% widthratio prediction.test_size 1 100 %}%
                     </small>
                 </div>
                 <div class="info-item mb-3">
@@ -116,24 +116,33 @@
         {% if prediction.status == 'completed' %}
             <div class="card">
                 <div class="card-header">
-                    <h6><i class="fas fa-chart-line"></i> Gráfico de Previsão</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="fas fa-chart-line"></i> Gráfico de Previsão</h6>
+                        <div>
+                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'predictions:export_csv' prediction.pk %}"><i class="fas fa-file-csv"></i> CSV</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'predictions:export_json' prediction.pk %}"><i class="fas fa-code"></i> JSON</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
-                    <div id="predictionChart" style="height: 400px;"></div>
+                    <canvas id="predictionChart" height="400"></canvas>
                 </div>
             </div>
-        {% elif prediction.status == 'training' %}
+        {% elif prediction.status == 'training' or prediction.status == 'queued' %}
             <div class="card">
                 <div class="card-body text-center py-5">
                     <div class="spinner-border text-primary mb-3" role="status">
                         <span class="visually-hidden">Processando...</span>
                     </div>
-                    <h5>Processando Previsão...</h5>
+                    <h5>{% if prediction.status == 'queued' %}Na fila{% else %}Processando Previsão...{% endif %}</h5>
                     <p class="text-muted">Isso pode levar alguns minutos dependendo do tamanho dos dados.</p>
                     <div class="progress" style="height: 6px;">
                         <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                             style="width: 100%"></div>
+                             id="progressBar" style="width: {{ prediction.progress|default:0 }}%"></div>
                     </div>
+                    {% if prediction.estimated_completion %}
+                    <small class="text-muted d-block mt-2">Estimativa de conclusão: {{ prediction.estimated_completion|date:"d/m/Y H:i" }}</small>
+                    {% endif %}
                 </div>
             </div>
         {% elif prediction.status == 'failed' %}
@@ -261,8 +270,25 @@ function createPredictionChart(data) {
             }
         }
     });
+
+    // Add PNG export button behavior
+    const header = document.querySelector('.card-header .btn.btn-sm.btn-outline-secondary');
+    // The first button is CSV, second is JSON; we add PNG via dynamic link
+    const pngBtn = document.createElement('a');
+    pngBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
+    pngBtn.innerHTML = '<i class="fas fa-image"></i> PNG';
+    pngBtn.href = '#';
+    pngBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = chart.toBase64Image('image/png', 1.0);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'prediction_chart.png';
+        a.click();
+    });
+    document.querySelector('.card-header div').appendChild(pngBtn);
 }
-{% elif prediction.status == 'training' %}
+{% elif prediction.status == 'training' or prediction.status == 'queued' %}
 // Poll for status updates
 function checkStatus() {
     fetch('{% url "predictions:status" prediction.pk %}')
@@ -271,6 +297,10 @@ function checkStatus() {
             if (data.status === 'completed' || data.status === 'failed') {
                 location.reload();
             } else {
+                const bar = document.getElementById('progressBar');
+                if (bar && data.progress !== undefined) {
+                    bar.style.width = `${data.progress}%`;
+                }
                 setTimeout(checkStatus, 2000);
             }
         })

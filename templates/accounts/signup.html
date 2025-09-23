@@ -19,15 +19,11 @@
                         <form method="post">
                             {% csrf_token %}
                             <div class="mb-4">
-                                <label for="id_username" class="form-label">
-                                    <i class="fas fa-user me-2"></i>Usuário
+                                <label for="id_email" class="form-label">
+                                    <i class="fas fa-envelope me-2"></i>E-mail
                                 </label>
-                                <input type="text" class="form-control form-control-lg" id="id_username" name="username" 
-                                       placeholder="Escolha um nome de usuário" required>
-                                <div class="form-text">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    150 caracteres ou menos. Letras, números e @/./+/-/_ apenas.
-                                </div>
+                                <input type="email" class="form-control form-control-lg" id="id_email" name="email" 
+                                       placeholder="seu@email.com" required>
                             </div>
                             <div class="mb-4">
                                 <label for="id_password1" class="form-label">

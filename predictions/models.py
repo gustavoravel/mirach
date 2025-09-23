@@ -43,6 +43,7 @@ class Prediction(models.Model):
     
     STATUS_CHOICES = [
         ('pending', 'Pendente'),
+        ('queued', 'Na fila'),
         ('training', 'Treinando'),
         ('completed', 'Concluído'),
         ('failed', 'Falhou'),
@@ -75,6 +76,9 @@ class Prediction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Concluído em")
     error_message = models.TextField(blank=True, verbose_name="Mensagem de Erro")
+    # Progresso/ETA
+    progress = models.IntegerField(default=0, verbose_name="Progresso (%)")
+    estimated_completion = models.DateTimeField(null=True, blank=True, verbose_name="Conclusão Estimada")
     
     class Meta:
         verbose_name = "Previsão"

@@ -58,6 +58,25 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = env('ALLOWED_HOSTS')
+# Normalize and safe defaults for local dev
+if isinstance(ALLOWED_HOSTS, str):
+    try:
+        import json as _json
+        parsed = _json.loads(ALLOWED_HOSTS)
+        ALLOWED_HOSTS = parsed if isinstance(parsed, list) else [str(parsed)]
+    except Exception:
+        ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS.split(',') if h.strip()]
+if DEBUG and not ALLOWED_HOSTS:
+    # Allow all in dev to avoid DisallowedHost, or specify common localhost hosts
+    ALLOWED_HOSTS = ['*']
+
+# Ensure common dev hosts are allowed
+COMMON_DEV_HOSTS = ['localhost', '127.0.0.1', '[::1]', 'host.docker.internal', 'web']
+if ALLOWED_HOSTS != ['*']:
+    existing = set(ALLOWED_HOSTS)
+    for h in COMMON_DEV_HOSTS:
+        if h not in existing:
+            ALLOWED_HOSTS.append(h)
 
 
 # Application definition

@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block title %}Nova Previsão (Wizard) - Mirach{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+  <h3 class="mb-3">Criar Previsão</h3>
+  <ul class="nav nav-pills mb-4">
+    <li class="nav-item"><span class="nav-link {% if step == 1 %}active{% endif %}">1. Dados</span></li>
+    <li class="nav-item"><span class="nav-link {% if step == 2 %}active{% endif %}">2. Modelo</span></li>
+    <li class="nav-item"><span class="nav-link {% if step == 3 %}active{% endif %}">3. Parâmetros</span></li>
+  </ul>
+
+  {% if step == 1 %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="1" />
+    <div class="mb-3">
+      <label class="form-label">Projeto</label>
+      <select name="project" class="form-select" required>
+        <option value="" disabled selected>Selecione</option>
+        {% for p in projects %}
+          <option value="{{ p.id }}" {% if state.project == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Dataset</label>
+      <select name="dataset" class="form-select" required>
+        <option value="" disabled selected>Selecione</option>
+        {% for d in datasets %}
+          <option value="{{ d.id }}" {% if state.dataset == d.id %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-primary" type="submit">Continuar</button>
+  </form>
+  {% elif step == 2 %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="2" />
+    <div class="mb-3">
+      <label class="form-label">Modelo</label>
+      <select name="model" class="form-select" required>
+        <option value="" disabled selected>Selecione</option>
+        {% for m in models %}
+          <option value="{{ m.id }}" {% if state.model == m.id %}selected{% endif %}>{{ m.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <a class="btn btn-outline-secondary" href="?step=1">Voltar</a>
+    <button class="btn btn-primary" type="submit">Continuar</button>
+  </form>
+  {% elif step == 3 %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="step" value="3" />
+    <div class="row">
+      <div class="col-md-6 mb-3">
+        <label class="form-label">Nome</label>
+        <input type="text" name="name" class="form-control" value="Previsão {{ state.project }}-{{ state.dataset }}" />
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Horizonte</label>
+        <input type="number" name="prediction_horizon" class="form-control" value="12" min="1" />
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Treino (%)</label>
+        <input type="number" name="train_size" class="form-control" value="0.8" step="0.05" min="0.5" max="0.95" />
+      </div>
+      <div class="col-md-4 mb-3">
+        <label class="form-label">Validação (%)</label>
+        <input type="number" name="validation_size" class="form-control" value="0.1" step="0.05" min="0.0" max="0.4" />
+      </div>
+    </div>
+    <a class="btn btn-outline-secondary" href="?step=2">Voltar</a>
+    <button class="btn btn-success" type="submit">Criar previsão</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+
+

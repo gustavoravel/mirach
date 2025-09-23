@@ -123,7 +123,8 @@ class PredictionService:
                 val_predictions = forecaster.predict(len(val_data))
                 metrics = forecaster.evaluate(val_data, val_predictions)
             else:
-                metrics = {'rmse': 0, 'mae': 0, 'mape': 0, 'r2': 0}
+                # Quick naive baseline for metrics when no val set
+                metrics = {'rmse': 0.0, 'mae': 0.0, 'mape': 0.0, 'r2': 0.0}
             
             # Create prediction results
             self._create_prediction_results(prediction, predictions, target_series)

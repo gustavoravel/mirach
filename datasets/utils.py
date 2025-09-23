@@ -141,6 +141,28 @@ def validate_time_series_data(df: pd.DataFrame, timestamp_col: str, target_col: 
     if not is_sorted:
         warnings.append("Os dados não estão ordenados cronologicamente")
     
+    # Detecção simples de outliers no alvo (Z-score e IQR)
+    try:
+        series = pd.to_numeric(df[target_col], errors='coerce')
+        series = series.dropna()
+        if len(series) > 0:
+            mean = series.mean()
+            std = series.std()
+            if std and std > 0:
+                z_scores = ((series - mean).abs() / std)
+                z_outliers = int((z_scores > 3).sum())
+                if z_outliers > 0:
+                    warnings.append(f"Detectados {z_outliers} outliers pelo critério Z-score > 3")
+            q1 = series.quantile(0.25)
+            q3 = series.quantile(0.75)
+            iqr = q3 - q1
+            if iqr and iqr > 0:
+                iqr_outliers = int(((series < (q1 - 1.5*iqr)) | (series > (q3 + 1.5*iqr))).sum())
+                if iqr_outliers > 0:
+                    warnings.append(f"Detectados {iqr_outliers} outliers pelo critério IQR")
+    except Exception:
+        pass
+
     return {
         'valid': len(errors) == 0,
         'errors': errors,

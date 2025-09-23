@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
+from django.http import HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -97,7 +98,12 @@ def prediction_run(request, pk):
     
     if request.method == 'POST':
         # enqueue async job
+        from datetime import timedelta, datetime
         prediction.status = 'queued'
+        prediction.progress = 0
+        # estimativa simples baseada no tamanho do dataset
+        est_minutes = max(1, int(prediction.dataset.total_rows or 1000) // 5000)
+        prediction.estimated_completion = datetime.now() + timedelta(minutes=est_minutes)
         prediction.save()
         run_prediction_task.delay(prediction.id)
         messages.success(request, 'Previsão enfileirada! Você será notificado ao concluir.')
@@ -110,6 +116,66 @@ def prediction_run(request, pk):
 def prediction_results(request, pk):
     prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
     return render(request, 'predictions/results.html', {'prediction': prediction})
+
+
+@login_required
+def prediction_wizard(request):
+    """Multi-step wizard: 1) escolher projeto/dataset, 2) escolher modelo, 3) parâmetros & confirmar"""
+    step = int(request.GET.get('step', request.POST.get('step', 1)))
+    session_key = 'prediction_wizard'
+    state = request.session.get(session_key, {})
+
+    from projects.models import Project
+    projects = Project.objects.filter(owner=request.user, is_active=True)
+
+    if request.method == 'POST':
+        step = int(request.POST.get('step', step))
+        if step == 1:
+            state['project'] = int(request.POST.get('project'))
+            state['dataset'] = int(request.POST.get('dataset'))
+            request.session[session_key] = state
+            return redirect(f"{request.path}?step=2")
+        elif step == 2:
+            state['model'] = int(request.POST.get('model'))
+            request.session[session_key] = state
+            return redirect(f"{request.path}?step=3")
+        elif step == 3:
+            # finalize
+            train_size = float(request.POST.get('train_size', 0.8))
+            validation_size = float(request.POST.get('validation_size', 0.1))
+            horizon = int(request.POST.get('prediction_horizon', 12))
+            name = request.POST.get('name', 'Nova Previsão')
+
+            project = get_object_or_404(Project, pk=state['project'], owner=request.user)
+            dataset = get_object_or_404(Dataset, pk=state['dataset'], project__owner=request.user)
+            model = get_object_or_404(PredictionModel, pk=state['model'])
+            model_parameters = model.parameters.copy()
+            prediction = Prediction.objects.create(
+                name=name,
+                project=project,
+                dataset=dataset,
+                prediction_model=model,
+                prediction_horizon=horizon,
+                train_size=train_size,
+                validation_size=validation_size,
+                test_size=1.0 - train_size - validation_size,
+                model_parameters=model_parameters,
+                created_by=request.user
+            )
+            request.session.pop(session_key, None)
+            messages.success(request, 'Previsão criada! Agora execute para gerar os resultados.')
+            return redirect('predictions:detail', pk=prediction.pk)
+
+    datasets = Dataset.objects.filter(project__owner=request.user)
+    models = PredictionModel.objects.filter(is_active=True)
+    context = {
+        'step': step,
+        'projects': projects,
+        'datasets': datasets,
+        'models': models,
+        'state': state,
+    }
+    return render(request, 'predictions/wizard.html', context)
 
 
 @login_required
@@ -182,8 +248,38 @@ def prediction_status(request, pk):
         prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
         return JsonResponse({
             'status': prediction.status,
-            'progress': prediction.get_progress_display() if hasattr(prediction, 'get_progress_display') else 0,
+            'progress': prediction.progress if hasattr(prediction, 'progress') else 0,
+            'eta': prediction.estimated_completion.isoformat() if prediction.estimated_completion else None,
             'error_message': prediction.error_message
         })
     except Exception as e:
         return JsonResponse({'error': str(e)})
+
+
+@login_required
+def export_results_csv(request, pk):
+    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    import csv
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="prediction_{pk}_results.csv"'
+    writer = csv.writer(response)
+    writer.writerow(['timestamp', 'predicted_value', 'actual_value', 'ci_lower', 'ci_upper'])
+    for r in prediction.results.all():
+        writer.writerow([r.timestamp, r.predicted_value, r.actual_value or '', r.confidence_interval_lower or '', r.confidence_interval_upper or ''])
+    return response
+
+
+@login_required
+def export_results_json(request, pk):
+    prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
+    data = [
+        {
+            'timestamp': r.timestamp.isoformat(),
+            'predicted_value': r.predicted_value,
+            'actual_value': r.actual_value,
+            'ci_lower': r.confidence_interval_lower,
+            'ci_upper': r.confidence_interval_upper,
+        }
+        for r in prediction.results.all()
+    ]
+    return JsonResponse({'results': data})
