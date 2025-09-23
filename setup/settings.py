@@ -36,6 +36,13 @@ env = environ.Env(
     AWS_S3_ENDPOINT_URL=(str, ''),
     AWS_ACCESS_KEY_ID=(str, ''),
     AWS_SECRET_ACCESS_KEY=(str, ''),
+    # Email
+    EMAIL_BACKEND=(str, 'django.core.mail.backends.console.EmailBackend'),
+    EMAIL_HOST=(str, ''),
+    EMAIL_PORT=(int, 587),
+    EMAIL_HOST_USER=(str, ''),
+    EMAIL_HOST_PASSWORD=(str, ''),
+    EMAIL_USE_TLS=(bool, True),
 )
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
@@ -184,6 +191,15 @@ LOGOUT_REDIRECT_URL = '/'
 
 # CORS settings
 CORS_ALLOW_ALL_ORIGINS = env('CORS_ALLOW_ALL_ORIGINS')
+
+# Email
+EMAIL_BACKEND = env('EMAIL_BACKEND')
+if EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend':
+    EMAIL_HOST = env('EMAIL_HOST')
+    EMAIL_PORT = env('EMAIL_PORT')
+    EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+    EMAIL_USE_TLS = env('EMAIL_USE_TLS')
 
 # REST Framework settings
 REST_FRAMEWORK = {
