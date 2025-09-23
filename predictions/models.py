@@ -70,6 +70,10 @@ class Prediction(models.Model):
     model_parameters = models.JSONField(default=dict, blank=True, verbose_name="Parâmetros do Modelo")
     metrics = models.JSONField(default=dict, blank=True, verbose_name="Métricas")
     predictions_data = models.JSONField(default=list, blank=True, verbose_name="Dados da Previsão")
+    explainability = models.JSONField(default=dict, blank=True, verbose_name="Explainability")
+    model_version = models.CharField(max_length=50, blank=True, verbose_name="Versão do Modelo")
+    dataset_version = models.CharField(max_length=50, blank=True, verbose_name="Versão do Dataset")
+    dataset_snapshot = models.JSONField(default=dict, blank=True, verbose_name="Snapshot do Dataset")
     
     # Metadados
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Criado por")

@@ -16,6 +16,7 @@ urlpatterns = [
     # API endpoints
     path('api/recommendations/<int:dataset_id>/', views.get_model_recommendations, name='recommendations'),
     path('api/compare/<int:dataset_id>/', views.compare_models, name='compare'),
+    path('api/backtest/<int:dataset_id>/', views.backtest, name='backtest'),
     path('api/visualization/<int:pk>/', views.get_visualization_data, name='visualization'),
     path('api/status/<int:pk>/', views.prediction_status, name='status'),
     path('api/export/<int:pk>/csv/', views.export_results_csv, name='export_csv'),

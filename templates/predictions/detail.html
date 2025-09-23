@@ -80,6 +80,13 @@
                     <span class="text-muted">{{ prediction.completed_at|date:"d/m/Y H:i" }}</span>
                 </div>
                 {% endif %}
+                {% if prediction.model_version or prediction.dataset_version %}
+                <div class="info-item mt-3">
+                    <strong>Versionamento:</strong><br>
+                    <small class="text-muted d-block">Modelo: {{ prediction.model_version|default:'-' }}</small>
+                    <small class="text-muted d-block">Dataset: {{ prediction.dataset_version|default:'-' }}</small>
+                </div>
+                {% endif %}
             </div>
         </div>
         
@@ -106,6 +113,27 @@
                     <div class="metric-label">R²</div>
                     <div class="metric-value">{{ prediction.metrics.r2|floatformat:3 }}</div>
                 </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if prediction.status == 'completed' and prediction.explainability %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6><i class="fas fa-lightbulb"></i> Explainability</h6>
+            </div>
+            <div class="card-body">
+                {% if prediction.explainability.feature_importances %}
+                <div class="mb-2"><strong>Importâncias</strong></div>
+                <pre class="small bg-light p-2 rounded">{{ prediction.explainability.feature_importances|safe }}</pre>
+                {% endif %}
+                {% if prediction.explainability.coefficients %}
+                <div class="mb-2"><strong>Coeficientes</strong></div>
+                <pre class="small bg-light p-2 rounded">{{ prediction.explainability.coefficients|safe }}</pre>
+                {% endif %}
+                {% if not prediction.explainability.feature_importances and not prediction.explainability.coefficients %}
+                <small class="text-muted">Sem dados de explainability para este modelo.</small>
+                {% endif %}
             </div>
         </div>
         {% endif %}

@@ -11,4 +11,5 @@ urlpatterns = [
     path('<int:pk>/delete/', views.dataset_delete, name='delete'),
     path('<int:pk>/mapping/', views.column_mapping, name='mapping'),
     path('<int:pk>/process/', views.dataset_process, name='process'),
+    path('<int:pk>/backtest/', views.dataset_backtest, name='backtest'),
 ]

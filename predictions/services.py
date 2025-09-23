@@ -126,6 +126,16 @@ class PredictionService:
                 # Quick naive baseline for metrics when no val set
                 metrics = {'rmse': 0.0, 'mae': 0.0, 'mape': 0.0, 'r2': 0.0}
             
+            # Explainability placeholder (depends on model)
+            explanation = {}
+            try:
+                if hasattr(forecaster, 'feature_importances_'):
+                    explanation['feature_importances'] = getattr(forecaster, 'feature_importances_', None)
+                if hasattr(forecaster, 'coef_'):
+                    explanation['coefficients'] = getattr(forecaster, 'coef_', None)
+            except Exception:
+                pass
+
             # Create prediction results
             self._create_prediction_results(prediction, predictions, target_series)
             
@@ -141,6 +151,16 @@ class PredictionService:
                 ),
                 'fit_results': fit_results
             }
+            # Versioning snapshot (lightweight info)
+            prediction.model_version = prediction.prediction_model.algorithm_type
+            prediction.dataset_version = str(len(target_series))
+            if len(target_series) > 0:
+                prediction.dataset_snapshot = {
+                    'start': str(target_series.index[0]),
+                    'end': str(target_series.index[-1]),
+                    'count': len(target_series)
+                }
+            prediction.explainability = explanation
             prediction.save()
             
             return {

@@ -46,6 +46,13 @@ try:
 except ImportError:
     XGBOOST_AVAILABLE = False
 
+# LightGBM (if available)
+try:
+    import lightgbm as lgb
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
+
 
 class BaseForecaster:
     """Base class for all forecasting algorithms"""
@@ -55,6 +62,7 @@ class BaseForecaster:
         self.model = None
         self.is_fitted = False
         self.metrics = {}
+        self._fit_series: Optional[pd.Series] = None
         
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit the model to the data"""
@@ -118,6 +126,7 @@ class ARIMAForecaster(BaseForecaster):
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit ARIMA model"""
         try:
+            self._fit_series = data
             if self.auto_order:
                 self.order = self._find_best_order(data)
             
@@ -158,6 +167,7 @@ class ETSForecaster(BaseForecaster):
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit ETS model"""
         try:
+            self._fit_series = data
             self.model = ExponentialSmoothing(
                 data,
                 trend=self.trend,
@@ -199,6 +209,7 @@ class ProphetForecaster(BaseForecaster):
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit Prophet model"""
         try:
+            self._fit_series = data
             # Prepare data for Prophet
             df = pd.DataFrame({
                 'ds': data.index,
@@ -253,6 +264,7 @@ class LSTMForecaster(BaseForecaster):
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit LSTM model"""
         try:
+            self._fit_series = data
             # Prepare data
             scaled_data = self.scaler.fit_transform(data.values.reshape(-1, 1)).flatten()
             X, y = self._create_sequences(scaled_data)
@@ -288,9 +300,10 @@ class LSTMForecaster(BaseForecaster):
         """Make LSTM predictions"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
-            
+        if self._fit_series is None:
+            raise ValueError("No fitted series available for prediction")
         # Get last sequence
-        last_sequence = self.scaler.transform(data.tail(self.sequence_length).values.reshape(-1, 1)).flatten()
+        last_sequence = self.scaler.transform(self._fit_series.tail(self.sequence_length).values.reshape(-1, 1)).flatten()
         last_sequence = last_sequence.reshape((1, self.sequence_length, 1))
         
         predictions = []
@@ -343,6 +356,7 @@ class MLForecaster(BaseForecaster):
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit ML model"""
         try:
+            self._fit_series = data
             # Create features
             feature_df = self._create_features(data)
             X = feature_df.drop(columns=[data.name])
@@ -383,23 +397,29 @@ class MLForecaster(BaseForecaster):
         """Make ML predictions"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
-            
-        # This is a simplified prediction - in practice, you'd need to
-        # create features for future time steps
+        if self._fit_series is None:
+            raise ValueError("No fitted series available for prediction")
+        # Simplified iterative prediction using last observations
         predictions = []
-        last_data = data.tail(5)  # Use last 5 points as base
+        last_data = self._fit_series.tail(5)
         
         for _ in range(steps):
             # Create features for next prediction
             feature_df = self._create_features(last_data)
-            X = feature_df.drop(columns=[data.name]).iloc[-1:]
+            X = feature_df.drop(columns=[last_data.name]).iloc[-1:]
             X_scaled = self.scaler.transform(X)
             
             pred = self.model.predict(X_scaled)[0]
             predictions.append(pred)
             
             # Update data for next iteration
-            last_data = pd.concat([last_data, pd.Series([pred])]).tail(5)
+            next_index = last_data.index[-1]
+            try:
+                next_index = next_index + 1
+            except Exception:
+                pass
+            new_point = pd.Series([pred], index=[next_index], name=last_data.name)
+            last_data = pd.concat([last_data, new_point]).tail(5)
         
         return pd.Series(predictions, name='forecast')
 
@@ -464,20 +484,91 @@ class XGBoostForecaster(BaseForecaster):
         """Make XGBoost predictions"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
-            
-        # Simplified prediction - in practice, you'd need proper feature engineering
+        if self._fit_series is None:
+            raise ValueError("No fitted series available for prediction")
+        # Simplified iterative prediction using last observations
         predictions = []
-        last_data = data.tail(10)  # Use last 10 points as base
+        last_data = self._fit_series.tail(10)
         
         for _ in range(steps):
             feature_df = self._create_features(last_data)
-            X = feature_df.drop(columns=[data.name]).iloc[-1:]
+            X = feature_df.drop(columns=[last_data.name]).iloc[-1:]
             pred = self.model.predict(X)[0]
             predictions.append(pred)
             
             # Update data for next iteration
-            last_data = pd.concat([last_data, pd.Series([pred])]).tail(10)
+            next_index = last_data.index[-1]
+            try:
+                next_index = next_index + 1
+            except Exception:
+                pass
+            new_point = pd.Series([pred], index=[next_index], name=last_data.name)
+            last_data = pd.concat([last_data, new_point]).tail(10)
         
+        return pd.Series(predictions, name='forecast')
+
+
+class LightGBMForecaster(BaseForecaster):
+    """LightGBM model for time series"""
+    def __init__(self, **kwargs):
+        if not LIGHTGBM_AVAILABLE:
+            raise ImportError("LightGBM is not available. Install with: pip install lightgbm")
+        super().__init__("LightGBM")
+        self.kwargs = kwargs
+        self.scaler = StandardScaler()
+
+    def _create_features(self, data: pd.Series, lags: int = 10) -> pd.DataFrame:
+        df = pd.DataFrame(data)
+        for i in range(1, lags + 1):
+            df[f'lag_{i}'] = data.shift(i)
+        for window in [3, 7, 14, 30]:
+            df[f'rolling_mean_{window}'] = data.rolling(window=window).mean()
+            df[f'rolling_std_{window}'] = data.rolling(window=window).std()
+        if hasattr(data.index, 'month'):
+            df['month'] = data.index.month
+            df['quarter'] = data.index.quarter
+            df['day_of_year'] = data.index.dayofyear
+            df['is_month_end'] = data.index.is_month_end.astype(int)
+            df['is_quarter_end'] = data.index.is_quarter_end.astype(int)
+        return df.dropna()
+
+    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+        try:
+            self._fit_series = data
+            feature_df = self._create_features(data)
+            X = feature_df.drop(columns=[data.name])
+            y = feature_df[data.name]
+            self.model = lgb.LGBMRegressor(**self.kwargs)
+            self.model.fit(X, y)
+            self.is_fitted = True
+            importances = dict(zip(X.columns, self.model.feature_importances_.tolist()))
+            return {
+                'n_features': X.shape[1],
+                'n_samples': len(y),
+                'feature_importance': importances
+            }
+        except Exception as e:
+            raise ValueError(f"LightGBM fitting failed: {str(e)}")
+
+    def predict(self, steps: int, **kwargs) -> pd.Series:
+        if not self.is_fitted:
+            raise ValueError("Model must be fitted first")
+        if self._fit_series is None:
+            raise ValueError("No fitted series available for prediction")
+        predictions = []
+        last_data = self._fit_series.tail(10)
+        for _ in range(steps):
+            feature_df = self._create_features(last_data)
+            X = feature_df.drop(columns=[last_data.name]).iloc[-1:]
+            pred = self.model.predict(X)[0]
+            predictions.append(pred)
+            next_index = last_data.index[-1]
+            try:
+                next_index = next_index + 1
+            except Exception:
+                pass
+            new_point = pd.Series([pred], index=[next_index], name=last_data.name)
+            last_data = pd.concat([last_data, new_point]).tail(10)
         return pd.Series(predictions, name='forecast')
 
 
@@ -545,7 +636,8 @@ def create_forecaster(model_type: str, **kwargs) -> BaseForecaster:
         'random_forest': lambda **k: MLForecaster('random_forest', **k),
         'svr': lambda **k: MLForecaster('svr', **k),
         'neural_network': lambda **k: MLForecaster('neural_network', **k),
-        'xgboost': XGBoostForecaster
+        'xgboost': XGBoostForecaster,
+        'lightgbm': LightGBMForecaster,
     }
     
     if model_type not in model_map:

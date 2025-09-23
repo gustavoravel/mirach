@@ -145,11 +145,19 @@ def prediction_wizard(request):
             validation_size = float(request.POST.get('validation_size', 0.1))
             horizon = int(request.POST.get('prediction_horizon', 12))
             name = request.POST.get('name', 'Nova Previsão')
+            params_json = request.POST.get('params_json', '').strip()
 
             project = get_object_or_404(Project, pk=state['project'], owner=request.user)
             dataset = get_object_or_404(Dataset, pk=state['dataset'], project__owner=request.user)
             model = get_object_or_404(PredictionModel, pk=state['model'])
             model_parameters = model.parameters.copy()
+            if params_json:
+                try:
+                    overrides = json.loads(params_json)
+                    if isinstance(overrides, dict):
+                        model_parameters.update(overrides)
+                except Exception:
+                    messages.warning(request, 'Hiperparâmetros inválidos (JSON). Usando padrões do modelo.')
             prediction = Prediction.objects.create(
                 name=name,
                 project=project,
@@ -226,6 +234,49 @@ def compare_models(request, dataset_id):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Method not allowed'})
+
+
+@login_required
+def backtest(request, dataset_id):
+    """Run a simple rolling-origin backtest and return JSON metrics"""
+    try:
+        dataset = get_object_or_404(Dataset, pk=dataset_id, project__owner=request.user)
+        models = request.GET.getlist('models') or ['arima', 'ets', 'prophet']
+        train_size = float(request.GET.get('train_size', 0.7))
+        horizon = int(request.GET.get('horizon', 6))
+
+        service = PredictionService()
+        target_series, _ = service.prepare_data(dataset)
+        n = len(target_series)
+        train_end = int(n * train_size)
+        results = {}
+
+        for model_type in models:
+            try:
+                forecaster = create_forecaster(model_type)
+            except Exception as e:
+                results[model_type] = {'error': str(e)}
+                continue
+            errors = []
+            for start in range(train_end, n - horizon, horizon):
+                train = target_series[:start]
+                test = target_series[start:start + horizon]
+                try:
+                    forecaster.fit(train)
+                    preds = forecaster.predict(len(test))
+                    mae = float(np.abs(np.array(test) - np.array(preds)).mean())
+                    errors.append(mae)
+                except Exception as e:
+                    errors.append(None)
+            errors = [e for e in errors if e is not None]
+            results[model_type] = {
+                'windows': len(errors),
+                'mae_mean': float(np.mean(errors)) if errors else None,
+            }
+
+        return JsonResponse({'success': True, 'backtest': results})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 @login_required

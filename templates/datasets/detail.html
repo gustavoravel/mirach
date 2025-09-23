@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}Dataset - Mirach{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h2><i class="fas fa-database"></i> {{ dataset.name }}</h2>
+  <div>
+    <a href="{% url 'datasets:backtest' dataset.pk %}" class="btn btn-outline-primary btn-sm">
+      <i class="fas fa-vial"></i> Backtest rápido
+    </a>
+  </div>
+  </div>
+
+<div class="card">
+  <div class="card-body">
+    <p class="mb-1"><strong>Projeto:</strong> {{ dataset.project.name }}</p>
+    <p class="mb-1"><strong>Linhas:</strong> {{ dataset.total_rows|default:"-" }}</p>
+    <p class="mb-0"><strong>Colunas:</strong> {{ dataset.total_columns|default:"-" }}</p>
+  </div>
+  <div class="card-footer small text-muted">
+    Status: {{ dataset.get_status_display }}
+  </div>
+</div>
+
+<div id="backtestResult" class="mt-3"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelector('a[href$="/backtest/"]').addEventListener('click', function(e) {
+  e.preventDefault();
+  const url = this.getAttribute('href');
+  const panel = document.getElementById('backtestResult');
+  panel.innerHTML = '<div class="alert alert-info">Rodando backtest...</div>';
+  fetch(url)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        panel.innerHTML = '<div class="alert alert-danger">Erro: ' + (data.error || 'Falha desconhecida') + '</div>';
+        return;
+      }
+      let html = '<div class="card"><div class="card-header"><strong>Backtest</strong></div><div class="card-body"><table class="table table-sm"><thead><tr><th>Modelo</th><th>Janelas</th><th>MAE médio</th></tr></thead><tbody>';
+      Object.keys(data.backtest).forEach(k => {
+        const r = data.backtest[k];
+        html += `<tr><td>${k}</td><td>${r.windows ?? '-'}</td><td>${(r.mae_mean ?? '').toString()}</td></tr>`;
+      });
+      html += '</tbody></table></div></div>';
+      panel.innerHTML = html;
+    })
+    .catch(err => {
+      panel.innerHTML = '<div class="alert alert-danger">Erro: ' + err + '</div>';
+    });
+});
+</script>
+{% endblock %}
+
+

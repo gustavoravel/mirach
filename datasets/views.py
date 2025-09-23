@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Dataset, ColumnMapping
+from django.http import JsonResponse
 
 
 @login_required
@@ -137,3 +138,14 @@ def dataset_process(request, pk):
         return redirect('datasets:detail', pk=dataset.pk)
     
     return render(request, 'datasets/process.html', {'dataset': dataset})
+
+
+@login_required
+def dataset_backtest(request, pk):
+    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    # Proxy to predictions backtest API
+    from predictions.views import backtest
+    request.GET._mutable = True
+    if 'models' not in request.GET:
+        request.GET.setlist('models', ['arima', 'ets', 'prophet'])
+    return backtest(request, dataset_id=pk)
