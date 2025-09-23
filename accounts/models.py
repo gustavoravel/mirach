@@ -1,6 +1,63 @@
 from django.db import models
 from django.contrib.auth.models import User
 import secrets
+from django.utils import timezone
+
+
+class Plan(models.Model):
+    code = models.CharField(max_length=30, unique=True)
+    name = models.CharField(max_length=100)
+    is_enterprise = models.BooleanField(default=False)
+    # Limits
+    max_projects = models.IntegerField(default=1)
+    max_datasets = models.IntegerField(default=2)
+    max_rows_per_dataset = models.IntegerField(default=50000)
+    monthly_predictions = models.IntegerField(default=5)
+    priority = models.CharField(max_length=10, default='low')  # low|high
+    includes_advanced_models = models.BooleanField(default=False)
+    includes_backtesting = models.BooleanField(default=False)
+    includes_exports = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+
+class Subscription(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT)
+    started_at = models.DateTimeField(default=timezone.now)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def is_trial_active(self):
+        return bool(self.trial_ends_at and self.trial_ends_at > timezone.now())
+
+    @staticmethod
+    def current_for(user: User):
+        sub = Subscription.objects.filter(user=user, is_active=True).order_by('-started_at').first()
+        if sub:
+            return sub
+        # default to Free plan if none
+        free = Plan.objects.filter(code='free').first()
+        if free:
+            return Subscription(user=user, plan=free, started_at=timezone.now(), is_active=True)
+        return None
+
+    def __str__(self):
+        return f"{self.user.username} -> {self.plan.code}"
+
+
+class UsageEvent(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='usage_events')
+    event_type = models.CharField(max_length=50)  # dataset_upload, prediction_create, backtest
+    created_at = models.DateTimeField(auto_now_add=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+
+class CreditBalance(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='credit_balances')
+    balance = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
 
 
 class APIToken(models.Model):

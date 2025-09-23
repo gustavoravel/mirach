@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from projects.models import ProjectMembership, Project
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
+from accounts.models import Subscription
 
 
 @login_required
@@ -31,11 +32,25 @@ def dataset_upload(request):
             if not membership:
                 messages.error(request, 'Você não tem permissão para enviar datasets neste projeto.')
                 return redirect('datasets:list')
+
+            # Enforce plan limits
+            sub = Subscription.current_for(request.user)
+            if sub and not sub.plan.is_enterprise:
+                # Count datasets for this user across projects
+                from .models import Dataset as DS
+                total_datasets = DS.objects.filter(project__memberships__user=request.user).count()
+                if total_datasets >= sub.plan.max_datasets:
+                    messages.warning(request, 'Limite de datasets atingido no seu plano. Faça upgrade para continuar.')
+                    return redirect('accounts:profile')
             
             # Processar o arquivo Excel
             result = process_excel_file(file)
             
             if result['success']:
+                # Max rows per dataset
+                if sub and result.get('total_rows') and result['total_rows'] > sub.plan.max_rows_per_dataset:
+                    messages.warning(request, f"Seu plano suporta até {sub.plan.max_rows_per_dataset} linhas por dataset. Faça upgrade para continuar.")
+                    return redirect('accounts:profile')
                 dataset = Dataset.objects.create(
                     name=file.name,
                     project=project,

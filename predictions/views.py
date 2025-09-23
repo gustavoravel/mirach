@@ -18,6 +18,7 @@ from .algorithms import create_forecaster
 import numpy as np
 from django.urls import reverse
 from django.views.decorators.cache import cache_page
+from accounts.models import Subscription, Plan, UsageEvent
 
 
 @login_required
@@ -47,6 +48,18 @@ def prediction_create(request):
             dataset = get_object_or_404(Dataset, pk=dataset_id, project=project)
             model = get_object_or_404(PredictionModel, pk=model_id)
             
+            # Enforce plan limits
+            sub = Subscription.current_for(request.user)
+            if sub and not sub.plan.is_enterprise:
+                # Monthly predictions count
+                from django.utils import timezone
+                from datetime import timedelta
+                start_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                month_preds = Prediction.objects.filter(created_by=request.user, created_at__gte=start_month).count()
+                if month_preds >= sub.plan.monthly_predictions:
+                    messages.warning(request, 'Limite mensal de previsões atingido no seu plano. Faça upgrade para continuar.')
+                    return redirect('accounts:profile')
+
             # Get model parameters
             model_parameters = model.parameters.copy()
             
@@ -79,6 +92,7 @@ def prediction_create(request):
                 model_parameters=model_parameters,
                 created_by=request.user
             )
+            UsageEvent.objects.create(user=request.user, event_type='prediction_create', metadata={'prediction_id': prediction.id})
             from projects.models import AuditLog
             AuditLog.objects.create(project=project, user=request.user, action='prediction_create', context={'prediction_id': prediction.id, 'name': prediction.name})
             messages.success(request, 'Previsão criada com sucesso!')

@@ -1,4 +1,11 @@
 from django.contrib import admin
+from .models import APIToken, Plan, Subscription, UsageEvent, CreditBalance, UserProfile
+
+admin.site.register(APIToken)
+admin.site.register(Plan)
+admin.site.register(Subscription)
+admin.site.register(UsageEvent)
+admin.site.register(CreditBalance)
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from .models import UserProfile, UserActivity

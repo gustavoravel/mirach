@@ -74,6 +74,17 @@
         </div>
     </nav>
 
+    <!-- Upgrade/Trial banner -->
+    {% if request.user.is_authenticated %}
+    {% with sub=request.user.subscriptions.all|first %}
+    {% if sub and sub.trial_ends_at %}
+    <div class="alert alert-warning text-center mb-0">
+        Seu trial termina em {{ sub.trial_ends_at|date:"d/m/Y" }}. <a href="{% url 'accounts:profile' %}">Faça upgrade</a> para manter recursos Pro.
+    </div>
+    {% endif %}
+    {% endwith %}
+    {% endif %}
+
     <!-- Messages -->
     {% if messages %}
         <div class="container mt-3">
