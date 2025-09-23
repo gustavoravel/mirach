@@ -82,19 +82,46 @@ def revoke_api_token(request, key):
 
 @login_required
 def settings_view(request):
+    try:
+        profile = request.user.userprofile
+    except UserProfile.DoesNotExist:
+        profile = UserProfile.objects.create(user=request.user)
     if request.method == 'POST':
-        # Placeholder for future settings save
+        profile.language = request.POST.get('language') or profile.language
+        profile.timezone = request.POST.get('timezone') or profile.timezone
+        profile.email_notifications = bool(request.POST.get('email_notifications'))
+        profile.company = request.POST.get('company', profile.company)
+        profile.job_title = request.POST.get('job_title', profile.job_title)
+        profile.phone = request.POST.get('phone', profile.phone)
+        profile.bio = request.POST.get('bio', profile.bio)
+        profile.save()
         messages.success(request, 'Configurações salvas.')
         return redirect('accounts:settings')
-    return render(request, 'accounts/settings.html')
+    return render(request, 'accounts/settings.html', {'profile': profile})
 
 
 @login_required
 def billing_view(request):
     from .models import Subscription, Plan, CreditBalance
     sub = Subscription.current_for(request.user)
+    # Garantir assinatura Free por padrão
+    if not Subscription.objects.filter(user=request.user, is_active=True).exists():
+        free = Plan.objects.filter(code='free').first()
+        if free:
+            sub = Subscription.objects.create(user=request.user, plan=free, is_active=True)
     credits = CreditBalance.objects.filter(user=request.user).first()
+    if credits is None:
+        credits = CreditBalance.objects.create(user=request.user, balance=0)
+    plans = Plan.objects.all().order_by('is_enterprise', 'code')
     if request.method == 'POST':
-        messages.success(request, 'Plano atualizado (simulação).')
+        plan_code = request.POST.get('plan')
+        plan = Plan.objects.filter(code=plan_code).first()
+        if plan:
+            # deactivate others
+            Subscription.objects.filter(user=request.user, is_active=True).update(is_active=False)
+            Subscription.objects.create(user=request.user, plan=plan, is_active=True)
+            messages.success(request, f'Plano atualizado para {plan.name}.')
+        else:
+            messages.error(request, 'Plano inválido.')
         return redirect('accounts:billing')
-    return render(request, 'accounts/billing.html', {'subscription': sub, 'credits': credits})
+    return render(request, 'accounts/billing.html', {'subscription': sub, 'credits': credits, 'plans': plans})

@@ -36,10 +36,20 @@
                                     <div><i class="fas fa-envelope me-1"></i>{{ user.email|default:user.username }}</div>
                                     {% with sub=user.subscriptions.all|first %}
                                     {% if sub %}
-                                    <div><i class="fas fa-crown me-1"></i>Plano: {{ sub.plan.name }}</div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span><i class="fas fa-crown me-1"></i>Plano:</span>
+                                        <span class="badge {% if sub.plan.code == 'pro' %}bg-success{% elif sub.plan.is_enterprise %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ sub.plan.name }}</span>
+                                    </div>
+                                    {% if sub.trial_ends_at %}
+                                    <div><i class="fas fa-hourglass-half me-1"></i>Trial: até {{ sub.trial_ends_at|date:"d/m/Y" }}</div>
+                                    {% endif %}
                                     {% endif %}
                                     {% endwith %}
+                                    {% with cb=user.credit_balances.all|first %}
+                                    <div><i class="fas fa-coins me-1"></i>Créditos: {{ cb.balance|default:0 }}</div>
+                                    {% endwith %}
                                 </li>
+                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#pricingModal"><i class="fas fa-arrow-up-right-from-square me-1"></i> Fazer upgrade</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">
                                     <i class="fas fa-user-circle"></i> Perfil
@@ -143,5 +153,85 @@
     <script src="{% static 'js/mirach.js' %}"></script>
     {% block extra_js %}
     {% endblock %}
+    <!-- Pricing Modal -->
+    <div class="modal fade" id="pricingModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="fas fa-crown me-2"></i> Planos Mirach</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            {% with sub=user.subscriptions.all|first %}
+            <div class="row g-3">
+              <div class="col-md-4">
+                <div class="card h-100">
+                  <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Free</span>
+                    {% if sub and sub.plan.code == 'free' %}<span class="badge bg-secondary">Atual</span>{% endif %}
+                  </div>
+                  <div class="card-body">
+                    <div class="h4 mb-2">R$ 0<span class="small text-muted">/mês</span></div>
+                    <ul class="small mb-3">
+                      <li>1 projeto</li>
+                      <li>2 datasets</li>
+                      <li>5 previsões/mês</li>
+                      <li>50k linhas/dataset</li>
+                      <li>Prioridade baixa</li>
+                    </ul>
+                    <form method="post" action="{% url 'accounts:billing' %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="plan" value="free" />
+                      <button class="btn btn-outline-secondary w-100" type="submit" {% if sub and sub.plan.code == 'free' %}disabled{% endif %}>{% if sub and sub.plan.code == 'free' %}Plano atual{% else %}Escolher{% endif %}</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card h-100">
+                  <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Pro</span>
+                    {% if sub and sub.plan.code == 'pro' %}<span class="badge bg-success">Atual</span>{% endif %}
+                  </div>
+                  <div class="card-body">
+                    <div class="h4 mb-2">R$ 99<span class="small text-muted">/mês</span></div>
+                    <ul class="small mb-3">
+                      <li>Projetos/datasets ilimitados</li>
+                      <li>Modelos avançados</li>
+                      <li>Backtesting e export</li>
+                      <li>Prioridade alta</li>
+                    </ul>
+                    <form method="post" action="{% url 'accounts:billing' %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="plan" value="pro" />
+                      <button class="btn btn-primary w-100" type="submit" {% if sub and sub.plan.code == 'pro' %}disabled{% endif %}>{% if sub and sub.plan.code == 'pro' %}Plano atual{% else %}Assinar Pro{% endif %}</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="card h-100">
+                  <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Business</span>
+                    {% if sub and sub.plan.is_enterprise %}<span class="badge bg-warning text-dark">Atual</span>{% endif %}
+                  </div>
+                  <div class="card-body">
+                    <div class="h4 mb-2">Sob consulta</div>
+                    <ul class="small mb-3">
+                      <li>SSO, RBAC avançado</li>
+                      <li>Ambientes isolados</li>
+                      <li>SLAs e suporte dedicado</li>
+                      <li>Prioridade máxima</li>
+                    </ul>
+                    <a class="btn btn-outline-primary w-100" href="{% url 'accounts:billing' %}">Falar com vendas</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {% endwith %}
+          </div>
+        </div>
+      </div>
+    </div>
 </body>
 </html>

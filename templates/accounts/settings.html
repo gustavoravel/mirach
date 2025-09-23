@@ -1,21 +1,47 @@
 {% extends 'base.html' %}
 {% block title %}Configurações - Mirach{% endblock %}
 {% block content %}
-<h2><i class="fas fa-sliders-h"></i> Configurações</h2>
-<form method="post" class="mt-3">
+<h2 class="mb-3"><i class="fas fa-sliders-h"></i> Configurações</h2>
+<form method="post" class="mt-3 col-lg-8">
   {% csrf_token %}
-  <div class="mb-3">
-    <label class="form-label">Idioma</label>
-    <select class="form-select" name="language">
-      <option value="pt-br">Português</option>
-      <option value="en-us">English</option>
-    </select>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <label class="form-label">Idioma</label>
+      <select class="form-select" name="language">
+        <option value="pt-br" {% if profile.language == 'pt-br' %}selected{% endif %}>Português</option>
+        <option value="en-us" {% if profile.language == 'en-us' %}selected{% endif %}>English</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Fuso horário</label>
+      <input class="form-control" name="timezone" value="{{ profile.timezone|default:'America/Sao_Paulo' }}" placeholder="America/Sao_Paulo">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Empresa</label>
+      <input class="form-control" name="company" value="{{ profile.company }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Cargo</label>
+      <input class="form-control" name="job_title" value="{{ profile.job_title }}">
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Telefone</label>
+      <input class="form-control" name="phone" value="{{ profile.phone }}">
+    </div>
+    <div class="col-12">
+      <label class="form-label">Sobre</label>
+      <textarea class="form-control" rows="3" name="bio">{{ profile.bio }}</textarea>
+    </div>
+    <div class="col-12 form-check">
+      <input class="form-check-input" type="checkbox" id="notif" name="email_notifications" {% if profile.email_notifications %}checked{% endif %}>
+      <label class="form-check-label" for="notif">Receber notificações por e-mail</label>
+    </div>
   </div>
-  <div class="form-check mb-3">
-    <input class="form-check-input" type="checkbox" id="notif" name="email_notifications">
-    <label class="form-check-label" for="notif">Receber notificações por e-mail</label>
+  <div class="mt-3">
+    <button class="btn btn-primary" type="submit"><i class="fas fa-save me-1"></i> Salvar</button>
+    <a href="{% url 'accounts:profile' %}" class="btn btn-outline-secondary ms-2">Cancelar</a>
   </div>
-  <button class="btn btn-primary" type="submit">Salvar</button>
+</form>
 {% endblock %}
 
 
