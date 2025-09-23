@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 import json
 from .models import Prediction, PredictionModel
 from .services import PredictionService
+from .tasks import run_prediction_task
 from datasets.models import Dataset
 
 
@@ -95,14 +96,11 @@ def prediction_run(request, pk):
     prediction = get_object_or_404(Prediction, pk=pk, project__owner=request.user)
     
     if request.method == 'POST':
-        service = PredictionService()
-        result = service.run_prediction(prediction)
-        
-        if result['success']:
-            messages.success(request, 'Previsão executada com sucesso!')
-        else:
-            messages.error(request, f'Erro na previsão: {result["error"]}')
-        
+        # enqueue async job
+        prediction.status = 'queued'
+        prediction.save()
+        run_prediction_task.delay(prediction.id)
+        messages.success(request, 'Previsão enfileirada! Você será notificado ao concluir.')
         return redirect('predictions:detail', pk=prediction.pk)
     
     return render(request, 'predictions/run.html', {'prediction': prediction})

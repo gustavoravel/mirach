@@ -11,21 +11,46 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import environ
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# ----------------------------------------------------------------------------
+# Environment
+# ----------------------------------------------------------------------------
+env = environ.Env(
+    DEBUG=(bool, True),
+    SECRET_KEY=(str, 'insecure-default'),
+    ALLOWED_HOSTS=(list, []),
+    DATABASE_URL=(str, f"sqlite:///{(Path(__file__).resolve().parent.parent / 'db.sqlite3').as_posix()}"),
+    TIME_ZONE=(str, 'America/Sao_Paulo'),
+    LANGUAGE_CODE=(str, 'en-us'),
+    CORS_ALLOW_ALL_ORIGINS=(bool, True),
+    STATIC_URL=(str, 'static/'),
+    MEDIA_URL=(str, '/media/'),
+    USE_S3=(bool, False),
+    AWS_STORAGE_BUCKET_NAME=(str, ''),
+    AWS_S3_REGION_NAME=(str, ''),
+    AWS_S3_ENDPOINT_URL=(str, ''),
+    AWS_ACCESS_KEY_ID=(str, ''),
+    AWS_SECRET_ACCESS_KEY=(str, ''),
+)
+
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-9zpbe(xgvsugpkx!z$76k5ingc)kes6)qnonb2ds7mze$+lwjp'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -79,15 +104,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'setup.wsgi.application'
 
+# Celery
+CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
+CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
+CELERY_TASK_TIME_LIMIT = env.int('CELERY_TASK_TIME_LIMIT', default=60 * 30)
+CELERY_TASK_SOFT_TIME_LIMIT = env.int('CELERY_TASK_SOFT_TIME_LIMIT', default=60 * 25)
+
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': env.db(),  # parses DATABASE_URL
 }
 
 
@@ -113,9 +142,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = env('LANGUAGE_CODE')
 
-TIME_ZONE = 'America/Sao_Paulo'
+TIME_ZONE = env('TIME_ZONE')
 
 USE_I18N = True
 
@@ -125,13 +154,28 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = env('STATIC_URL')
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = env('MEDIA_URL')
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# ----------------------------------------------------------------------------
+# Storage (S3/MinIO via django-storages)
+# ----------------------------------------------------------------------------
+USE_S3 = env('USE_S3')
+if USE_S3:
+    INSTALLED_APPS = [*INSTALLED_APPS, 'storages']
+    AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME') or None
+    AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL') or None
+    AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_FILE_OVERWRITE = False
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # Login/Logout URLs
 LOGIN_URL = '/accounts/login/'
@@ -139,7 +183,7 @@ LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Only for development
+CORS_ALLOW_ALL_ORIGINS = env('CORS_ALLOW_ALL_ORIGINS')
 
 # REST Framework settings
 REST_FRAMEWORK = {
