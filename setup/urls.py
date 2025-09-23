@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.shortcuts import redirect
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -25,7 +26,7 @@ urlpatterns = [
     path('projects/', include('projects.urls')),
     path('datasets/', include('datasets.urls')),
     path('predictions/', include('predictions.urls')),
-    path('', include('projects.urls')),  # Home page redirects to projects
+    path('', lambda request: redirect('projects:list')),  # Home page redirects to projects
 ]
 
 # Serve media files in development
