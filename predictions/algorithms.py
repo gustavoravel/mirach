@@ -63,6 +63,25 @@ class BaseForecaster:
         self.is_fitted = False
         self.metrics = {}
         self._fit_series: Optional[pd.Series] = None
+
+    def _coerce_params(self, params_obj: Any) -> Dict[str, Any]:
+        try:
+            # pandas Series
+            if hasattr(params_obj, 'to_dict'):
+                return {k: (float(v) if isinstance(v, (np.floating, float)) else (int(v) if isinstance(v, (np.integer, int)) else v)) for k, v in params_obj.to_dict().items()}  # type: ignore[name-defined]
+            # dict
+            if isinstance(params_obj, dict):
+                return params_obj
+            # numpy array with names not available
+            try:
+                import numpy as np  # local import for safety
+                if isinstance(params_obj, (np.ndarray, list, tuple)):
+                    return {f'p{i}': float(v) for i, v in enumerate(list(params_obj))}
+            except Exception:
+                pass
+            return {'params': str(params_obj)}
+        except Exception:
+            return {'params': 'unavailable'}
         
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit the model to the data"""
@@ -99,6 +118,7 @@ class ARIMAForecaster(BaseForecaster):
         self.order = order or (1, 1, 1)
         self.seasonal_order = seasonal_order
         self.auto_order = order is None
+        self.fitted_model = None
         
     def _find_best_order(self, data: pd.Series) -> Tuple[int, int, int]:
         """Find optimal ARIMA order using AIC"""
@@ -126,6 +146,16 @@ class ARIMAForecaster(BaseForecaster):
     def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
         """Fit ARIMA model"""
         try:
+            # Sanitize data
+            if not isinstance(data, pd.Series):
+                data = pd.Series(data)
+            # Ensure numeric series
+            data = pd.to_numeric(data, errors='coerce').dropna()
+            # Ensure sorted by index
+            if not data.index.is_monotonic_increasing:
+                data = data.sort_index()
+            # Use a simple integer index to avoid backend issues comparing index types
+            data = pd.Series(data.values, index=pd.RangeIndex(start=0, stop=len(data), step=1), name=data.name)
             self._fit_series = data
             if self.auto_order:
                 self.order = self._find_best_order(data)
@@ -133,13 +163,14 @@ class ARIMAForecaster(BaseForecaster):
             self.model = ARIMA(data, order=self.order, seasonal_order=self.seasonal_order)
             fitted_model = self.model.fit()
             self.is_fitted = True
+            self.fitted_model = fitted_model
             
             return {
                 'order': self.order,
                 'seasonal_order': self.seasonal_order,
                 'aic': fitted_model.aic,
                 'bic': fitted_model.bic,
-                'params': fitted_model.params.to_dict()
+                'params': self._coerce_params(getattr(fitted_model, 'params', {}))
             }
         except Exception as e:
             raise ValueError(f"ARIMA fitting failed: {str(e)}")
@@ -148,11 +179,9 @@ class ARIMAForecaster(BaseForecaster):
         """Make ARIMA predictions"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
-            
-        forecast = self.model.forecast(steps=steps)
-        confidence_intervals = self.model.get_forecast(steps=steps).conf_int()
-        
-        return pd.Series(forecast, name='forecast')
+        res = self.fitted_model.get_forecast(steps=steps)
+        forecast = res.predicted_mean
+        return pd.Series(forecast.values if hasattr(forecast, 'values') else forecast, name='forecast')
 
 
 class ETSForecaster(BaseForecaster):
@@ -176,14 +205,15 @@ class ETSForecaster(BaseForecaster):
             )
             fitted_model = self.model.fit()
             self.is_fitted = True
+            self.fitted_model = fitted_model
             
             return {
                 'trend': self.trend,
                 'seasonal': self.seasonal,
                 'seasonal_periods': self.seasonal_periods,
-                'aic': fitted_model.aic,
-                'bic': fitted_model.bic,
-                'params': fitted_model.params.to_dict()
+                'aic': getattr(fitted_model, 'aic', None),
+                'bic': getattr(fitted_model, 'bic', None),
+                'params': self._coerce_params(getattr(fitted_model, 'params', {}))
             }
         except Exception as e:
             raise ValueError(f"ETS fitting failed: {str(e)}")
@@ -192,9 +222,8 @@ class ETSForecaster(BaseForecaster):
         """Make ETS predictions"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
-            
-        forecast = self.model.forecast(steps=steps)
-        return pd.Series(forecast, name='forecast')
+        forecast = self.fitted_model.forecast(steps=steps)
+        return pd.Series(forecast.values if hasattr(forecast, 'values') else forecast, name='forecast')
 
 
 class ProphetForecaster(BaseForecaster):
@@ -644,11 +673,41 @@ def create_forecaster(model_type: str, **kwargs) -> BaseForecaster:
         raise ValueError(f"Unknown model type: {model_type}")
     
     ctor = model_map[model_type]
-    # Harmonize basic params
+    # Harmonize & coerce params
     if model_type == 'ets':
         allowed = {'trend', 'seasonal', 'seasonal_periods'}
-        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+        coerced: Dict[str, Any] = {}
+        for k, v in kwargs.items():
+            if k not in allowed:
+                continue
+            if k == 'seasonal_periods' and isinstance(v, str):
+                try:
+                    coerced[k] = int(v)
+                except Exception:
+                    coerced[k] = v
+            else:
+                coerced[k] = v
+        kwargs = coerced
     if model_type == 'arima':
         allowed = {'order', 'seasonal_order'}
-        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+        coerced: Dict[str, Any] = {}
+        for k, v in kwargs.items():
+            if k not in allowed:
+                continue
+            if isinstance(v, str):
+                s = v.strip().strip('()').strip('[]')
+                parts = [p for p in s.split(',') if p.strip() != '']
+                try:
+                    tuple_val = tuple(int(p) for p in parts)
+                    coerced[k] = tuple_val
+                except Exception:
+                    coerced[k] = v
+            elif isinstance(v, list):
+                try:
+                    coerced[k] = tuple(int(p) for p in v)
+                except Exception:
+                    coerced[k] = tuple(v)
+            else:
+                coerced[k] = v
+        kwargs = coerced
     return ctor(**kwargs)

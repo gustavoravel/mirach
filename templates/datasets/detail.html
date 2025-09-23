@@ -28,15 +28,36 @@
 
 {% block extra_js %}
 <script>
+// Abrir modal de upgrade se sinalizado
+if (new URLSearchParams(window.location.search).get('upgrade') === '1') {
+  const modalEl = document.getElementById('pricingModal');
+  if (modalEl) { new bootstrap.Modal(modalEl).show(); }
+}
 document.querySelector('a[href$="/backtest/"]').addEventListener('click', function(e) {
   e.preventDefault();
   const url = this.getAttribute('href');
   const panel = document.getElementById('backtestResult');
   panel.innerHTML = '<div class="alert alert-info">Rodando backtest...</div>';
-  fetch(url)
-    .then(r => r.json())
+  fetch(url, {headers: {'Accept': 'application/json'}})
+    .then(async (r) => {
+      const ct = r.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) {
+        // Recebeu HTML (provável redirect/upgrade). Abre modal e aborta.
+        const modalEl = document.getElementById('pricingModal');
+        if (modalEl) { new bootstrap.Modal(modalEl).show(); }
+        panel.innerHTML = '<div class="alert alert-warning">Recurso disponível em planos pagos. Veja os planos acima.</div>';
+        throw new Error('Non-JSON response');
+      }
+      return r.json();
+    })
     .then(data => {
       if (!data.success) {
+        if (data.error === 'upgrade_required') {
+          const modalEl = document.getElementById('pricingModal');
+          if (modalEl) { new bootstrap.Modal(modalEl).show(); }
+          panel.innerHTML = '<div class="alert alert-warning">Recurso disponível em planos pagos. Veja os planos acima.</div>';
+          return;
+        }
         panel.innerHTML = '<div class="alert alert-danger">Erro: ' + (data.error || 'Falha desconhecida') + '</div>';
         return;
       }
@@ -49,6 +70,7 @@ document.querySelector('a[href$="/backtest/"]').addEventListener('click', functi
       panel.innerHTML = html;
     })
     .catch(err => {
+      if (String(err).includes('Non-JSON')) return;
       panel.innerHTML = '<div class="alert alert-danger">Erro: ' + err + '</div>';
     });
 });

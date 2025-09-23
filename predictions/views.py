@@ -19,7 +19,16 @@ import numpy as np
 from django.urls import reverse
 from django.views.decorators.cache import cache_page
 from accounts.models import Subscription, Plan, UsageEvent
+from django.conf import settings
 
+ALLOWED_FREE_MODELS = {'arima', 'ets', 'prophet', 'linear_regression'}
+
+def _debug_log(message: str):
+    if getattr(settings, 'DEBUG', False):
+        try:
+            print(f"[DEBUG] {message}")
+        except Exception:
+            pass
 
 @login_required
 def prediction_list(request):
@@ -59,6 +68,10 @@ def prediction_create(request):
                 if month_preds >= sub.plan.monthly_predictions:
                     messages.warning(request, 'Limite mensal de previsões atingido no seu plano. Faça upgrade para continuar.')
                     return redirect('accounts:profile')
+                # Model gating for Free plan
+                if sub.plan.code == 'free' and model.algorithm_type not in ALLOWED_FREE_MODELS:
+                    messages.warning(request, 'Este modelo é Pro. Faça upgrade para utilizá-lo.')
+                    return redirect(f"{reverse('predictions:create')}?upgrade=1")
 
             # Get model parameters
             model_parameters = model.parameters.copy()
@@ -103,18 +116,23 @@ def prediction_create(request):
     from projects.models import Project
     
     projects = Project.objects.filter(memberships__user=request.user, is_active=True).distinct()
-    datasets = Dataset.objects.filter(project__memberships__user=request.user, status='processed')
-    models = PredictionModel.objects.filter(is_active=True)
+    datasets = Dataset.objects.filter(project__memberships__user=request.user, status__in=['processed','uploaded'])
+    sub = Subscription.current_for(request.user)
+    if sub and sub.plan.code == 'free':
+        models = PredictionModel.objects.filter(is_active=True, algorithm_type__in=ALLOWED_FREE_MODELS)
+    else:
+        models = PredictionModel.objects.filter(is_active=True)
     
     return render(request, 'predictions/create.html', {
         'projects': projects,
         'datasets': datasets,
-        'models': models
+        'models': models,
+        'plan_code': (sub.plan.code if sub else 'free'),
+        'allowed_free': ALLOWED_FREE_MODELS,
     })
 
 
 @login_required
-@cache_page(30)
 def prediction_detail(request, pk):
     prediction = get_object_or_404(Prediction, pk=pk)
     if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
@@ -129,17 +147,34 @@ def prediction_run(request, pk):
     if not ProjectMembership.objects.filter(project=prediction.project, user=request.user, role__in=['owner','editor']).exists():
         messages.error(request, 'Você não tem permissão para executar esta previsão.')
         return redirect('predictions:list')
+    # Feature gate: somente planos pagos
+    sub = Subscription.current_for(request.user)
+    if sub and sub.plan.code == 'free':
+        # Permitir execução se o modelo for básico; bloquear se avançado
+        if prediction.prediction_model.algorithm_type not in ALLOWED_FREE_MODELS:
+            messages.warning(request, 'Este modelo é Pro. Faça upgrade para continuar.')
+            return redirect(f"{reverse('predictions:detail', args=[prediction.pk])}?upgrade=1")
+        # Aplicar limites do plano Free (soft caps)
+        max_free_horizon = 30
+        if prediction.prediction_horizon > max_free_horizon:
+            prediction.prediction_horizon = max_free_horizon
+            prediction.save(update_fields=['prediction_horizon'])
+            messages.info(request, f'Horizonte ajustado para {max_free_horizon} períodos no plano Free.')
     
     if request.method == 'POST':
         # enqueue async job
         from datetime import timedelta, datetime
         prediction.status = 'queued'
         prediction.progress = 0
+        prediction.error_message = ''
+        prediction.metrics = {}
+        prediction.predictions_data = {}
         # estimativa simples baseada no tamanho do dataset
         est_minutes = max(1, int(prediction.dataset.total_rows or 1000) // 5000)
         prediction.estimated_completion = datetime.now() + timedelta(minutes=est_minutes)
         prediction.save()
-        run_prediction_task.delay(prediction.id)
+        queue_name = 'predictions_high' if getattr(prediction.project, 'priority', 'low') == 'high' else 'predictions_default'
+        run_prediction_task.apply_async(args=[prediction.id], queue=queue_name)
         from projects.models import AuditLog
         AuditLog.objects.create(project=prediction.project, user=request.user, action='prediction_run', context={'prediction_id': prediction.id})
         messages.success(request, 'Previsão enfileirada! Você será notificado ao concluir.')
@@ -155,6 +190,30 @@ def prediction_results(request, pk):
         messages.error(request, 'Acesso negado a esta previsão.')
         return redirect('predictions:list')
     return render(request, 'predictions/results.html', {'prediction': prediction})
+
+
+@login_required
+def prediction_explore(request, pk):
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a esta previsão.')
+        return redirect('predictions:list')
+    # Preparar dados para exploração
+    try:
+        from .services import PredictionService
+        service = PredictionService()
+        viz = service.create_visualization_data(prediction)
+        if not viz.get('success'):
+            messages.error(request, viz.get('error','Falha ao preparar dados de visualização'))
+            return redirect('predictions:detail', pk=pk)
+        data = viz['data']
+    except Exception as e:
+        messages.error(request, str(e))
+        return redirect('predictions:detail', pk=pk)
+    return render(request, 'predictions/explore.html', {
+        'prediction': prediction,
+        'viz': data,
+    })
 
 
 @login_required
@@ -214,7 +273,11 @@ def prediction_wizard(request):
             return redirect('predictions:detail', pk=prediction.pk)
 
     datasets = Dataset.objects.filter(project__owner=request.user)
-    models = PredictionModel.objects.filter(is_active=True)
+    sub = Subscription.current_for(request.user)
+    if sub and sub.plan.code == 'free':
+        models = PredictionModel.objects.filter(is_active=True, algorithm_type__in=ALLOWED_FREE_MODELS)
+    else:
+        models = PredictionModel.objects.filter(is_active=True)
     context = {
         'step': step,
         'projects': projects,
@@ -222,6 +285,7 @@ def prediction_wizard(request):
         'models': models,
         'state': state,
     }
+    context.update({'plan_code': (sub.plan.code if sub else 'free'), 'allowed_free': ALLOWED_FREE_MODELS})
     return render(request, 'predictions/wizard.html', context)
 
 
@@ -270,6 +334,9 @@ def compare_models(request, dataset_id):
             dataset = get_object_or_404(Dataset, pk=dataset_id)
             if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
                 return JsonResponse({'success': False, 'error': 'Acesso negado'})
+            sub = Subscription.current_for(request.user)
+            if sub and sub.plan.code == 'free':
+                return JsonResponse({'success': False, 'error': 'upgrade_required'}, status=403)
             models = request.POST.getlist('models')
             train_size = float(request.POST.get('train_size', 0.8))
             
@@ -290,6 +357,9 @@ def backtest(request, dataset_id):
         dataset = get_object_or_404(Dataset, pk=dataset_id)
         if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
             return JsonResponse({'success': False, 'error': 'Acesso negado'})
+        sub = Subscription.current_for(request.user)
+        if sub and sub.plan.code == 'free':
+            return JsonResponse({'success': False, 'error': 'upgrade_required'}, status=403)
         models = request.GET.getlist('models') or ['arima', 'ets', 'prophet']
         train_size = float(request.GET.get('train_size', 0.7))
         horizon = int(request.GET.get('horizon', 6))
@@ -355,12 +425,25 @@ def prediction_status(request, pk):
         prediction = get_object_or_404(Prediction, pk=pk)
         if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
             return JsonResponse({'error': 'Acesso negado'})
-        return JsonResponse({
+        payload = {
             'status': prediction.status,
             'progress': prediction.progress if hasattr(prediction, 'progress') else 0,
             'eta': prediction.estimated_completion.isoformat() if prediction.estimated_completion else None,
             'error_message': prediction.error_message
-        })
+        }
+        # Verbose fields only in DEBUG and when requested
+        if getattr(settings, 'DEBUG', False) and request.GET.get('verbose'):
+            payload.update({
+                'id': prediction.id,
+                'name': prediction.name,
+                'project_id': prediction.project_id,
+                'dataset_id': prediction.dataset_id,
+                'model': getattr(prediction.prediction_model, 'algorithm_type', None),
+                'created_at': prediction.created_at.isoformat() if prediction.created_at else None,
+                'completed_at': prediction.completed_at.isoformat() if prediction.completed_at else None,
+            })
+        _debug_log(f"prediction_status user={request.user.id} pk={pk} payload={payload}")
+        return JsonResponse(payload)
     except Exception as e:
         return JsonResponse({'error': str(e)})
 
@@ -480,6 +563,11 @@ def api_create_prediction(request):
             model = get_object_or_404(PredictionModel, algorithm_type=model_type, is_active=True)
         else:
             return JsonResponse({'error': 'model_id or model_type is required'}, status=400)
+
+        # Model gating for Free plan
+        sub = Subscription.current_for(request.user)
+        if sub and sub.plan.code == 'free' and model.algorithm_type not in ALLOWED_FREE_MODELS:
+            return JsonResponse({'error': 'upgrade_required', 'detail': 'Model not available for Free plan'}, status=403)
 
         model_parameters = model.parameters.copy()
         if isinstance(params, dict):

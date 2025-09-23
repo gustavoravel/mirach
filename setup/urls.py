@@ -20,6 +20,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.shortcuts import redirect, render
 from setup.views_admin import saas_dashboard
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,7 +29,7 @@ urlpatterns = [
     path('datasets/', include('datasets.urls')),
     path('predictions/', include('predictions.urls')),
     path('', include('accounts.urls')),  # Landing page and auth
-    path('docs/', lambda request: render(request, 'docs.html'), name='docs'),
+    path('docs/', TemplateView.as_view(template_name='docs.html'), name='docs'),
     path('admin/saas/', saas_dashboard, name='saas_dashboard'),
 ]
 

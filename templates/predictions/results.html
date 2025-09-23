@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+
+{% block title %}Resultados da Previsão - Mirach{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h4><i class="fas fa-chart-line"></i> Resultados: {{ prediction.name }}</h4>
+            </div>
+            <div class="card-body">
+                {% if prediction.status != 'completed' %}
+                    <div class="alert alert-info mb-0">Esta previsão ainda não foi concluída. Status atual: <strong>{{ prediction.status }}</strong>.</div>
+                {% else %}
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="mb-2">Métricas</h6>
+                            <ul class="list-unstyled small mb-0">
+                                <li>RMSE: {{ prediction.metrics.rmse|default:'—' }}</li>
+                                <li>MAE: {{ prediction.metrics.mae|default:'—' }}</li>
+                                <li>MAPE: {{ prediction.metrics.mape|default:'—' }}</li>
+                                <li>R²: {{ prediction.metrics.r2|default:'—' }}</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6 text-md-end">
+                            <a class="btn btn-outline-primary me-2" href="{% url 'predictions:export_csv' prediction.pk %}"><i class="fas fa-file-csv"></i> Exportar CSV</a>
+                            <a class="btn btn-outline-primary" href="{% url 'predictions:export_json' prediction.pk %}"><i class="fas fa-file-code"></i> Exportar JSON</a>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th class="text-end">Previsto</th>
+                                    <th class="text-end">Real</th>
+                                    <th class="text-end">IC (inf)</th>
+                                    <th class="text-end">IC (sup)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for r in prediction.results.all %}
+                                <tr>
+                                    <td>{{ r.timestamp|date:'Y-m-d' }}</td>
+                                    <td class="text-end">{{ r.predicted_value }}</td>
+                                    <td class="text-end">{{ r.actual_value|default:'' }}</td>
+                                    <td class="text-end">{{ r.confidence_interval_lower|default:'' }}</td>
+                                    <td class="text-end">{{ r.confidence_interval_upper|default:'' }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center text-muted">Sem dados de resultados.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex justify-content-between">
+            <a href="{% url 'predictions:detail' prediction.pk %}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Voltar</a>
+            <a href="{% url 'predictions:list' %}" class="btn btn-outline-secondary">Ver todas</a>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
+

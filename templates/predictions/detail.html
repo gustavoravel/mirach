@@ -226,6 +226,14 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+// Abrir modal de upgrade se sinalizado na querystring
+if (new URLSearchParams(window.location.search).get('upgrade') === '1') {
+  const modalEl = document.getElementById('pricingModal');
+  if (modalEl) {
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+  }
+}
 {% if prediction.status == 'completed' %}
 // Load visualization data and create chart
 fetch('{% url "predictions:visualization" prediction.pk %}')

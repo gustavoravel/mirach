@@ -10,6 +10,7 @@ urlpatterns = [
     path('create/', views.prediction_create, name='create'),
     path('wizard/', views.prediction_wizard, name='wizard'),
     path('<int:pk>/', views.prediction_detail, name='detail'),
+    path('<int:pk>/explore/', views.prediction_explore, name='explore'),
     path('<int:pk>/run/', views.prediction_run, name='run'),
     path('<int:pk>/results/', views.prediction_results, name='results'),
     path('<int:pk>/delete/', views.prediction_delete, name='delete'),

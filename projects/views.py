@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Project, ProjectMembership, ProjectInvitation, AuditLog
+from accounts.models import Subscription
 from django.http import JsonResponse
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -43,8 +44,10 @@ def project_detail(request, pk):
         return redirect('projects:list')
     members = ProjectMembership.objects.filter(project=project).select_related('user')
     invites = ProjectInvitation.objects.filter(project=project, is_active=True)
+    owner_sub = Subscription.current_for(project.owner)
+    can_collaborate = bool(owner_sub and owner_sub.plan.code != 'free')
     logs = AuditLog.objects.filter(project=project)[:50]
-    return render(request, 'projects/detail.html', {'project': project, 'members': members, 'invites': invites, 'logs': logs})
+    return render(request, 'projects/detail.html', {'project': project, 'members': members, 'invites': invites, 'logs': logs, 'can_collaborate': can_collaborate})
 
 
 @login_required
@@ -79,6 +82,11 @@ def project_invite(request, pk):
     project = get_object_or_404(Project, pk=pk)
     if not ProjectMembership.objects.filter(project=project, user=request.user, role__in=['owner','editor']).exists():
         messages.error(request, 'Apenas owner/editor podem convidar membros.')
+        return redirect('projects:detail', pk=pk)
+    # Feature gate: only paid plans can collaborate
+    owner_sub = Subscription.current_for(project.owner)
+    if not owner_sub or owner_sub.plan.code == 'free':
+        messages.warning(request, 'Colaboração disponível apenas em planos pagos. Faça upgrade para convidar membros.')
         return redirect('projects:detail', pk=pk)
 
     if request.method == 'POST':

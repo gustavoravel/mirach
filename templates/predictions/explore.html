@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}Explorar Previsão - {{ prediction.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="mb-0"><i class="fas fa-chart-area me-2"></i>Explorar: {{ prediction.name }}</h4>
+        <div>
+          <a href="{% url 'predictions:detail' prediction.pk %}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Voltar</a>
+        </div>
+      </div>
+      <div class="card-body">
+        {% if prediction.status != 'completed' %}
+        <div class="alert alert-info">Previsão ainda não concluída.</div>
+        {% else %}
+        <div class="row g-3">
+          <div class="col-lg-8">
+            <div id="timeseries" style="height:420px;"></div>
+          </div>
+          <div class="col-lg-4">
+            <div class="border rounded p-3 mb-3">
+              <div class="small text-muted">Métricas</div>
+              <ul class="list-unstyled small mb-0">
+                <li>RMSE: {{ viz.metrics.rmse|default:'—' }}</li>
+                <li>MAE: {{ viz.metrics.mae|default:'—' }}</li>
+                <li>MAPE: {{ viz.metrics.mape|default:'—' }}</li>
+                <li>R²: {{ viz.metrics.r2|default:'—' }}</li>
+              </ul>
+            </div>
+            <div class="border rounded p-3">
+              <div class="small text-muted">Modelo</div>
+              <div class="small">{{ prediction.prediction_model.name }}</div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<script>
+(function(){
+  {% if prediction.status == 'completed' %}
+  const hist = {{ viz.historical|safe }};
+  const fc = {{ viz.forecast|safe }};
+  const histTrace = { x: hist.dates, y: hist.values, type: 'scatter', mode: 'lines', name: 'Histórico', line:{color:'#6c757d'} };
+  const fcTrace = { x: fc.dates, y: fc.values, type: 'scatter', mode: 'lines', name: 'Previsão', line:{color:'#667eea'} };
+  Plotly.newPlot('timeseries', [histTrace, fcTrace], {margin:{t:20}, xaxis:{title:'Data'}, yaxis:{title:'Valor'}});
+  {% endif %}
+})();
+</script>
+{% endblock %}
+
+

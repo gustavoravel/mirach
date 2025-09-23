@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+
+{% block title %}Executar Previsão - Mirach{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-play"></i> Executar Previsão</h4>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">Você está prestes a executar a previsão <strong>{{ prediction.name }}</strong> do projeto <strong>{{ prediction.project.name }}</strong>.</p>
+                <ul class="mb-4">
+                    <li><strong>Modelo:</strong> {{ prediction.prediction_model.name }}</li>
+                    <li><strong>Horizonte:</strong> {{ prediction.prediction_horizon }}</li>
+                    <li><strong>Dataset:</strong> {{ prediction.dataset.name }}</li>
+                </ul>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'predictions:detail' prediction.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Voltar
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-rocket"></i> Executar agora
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

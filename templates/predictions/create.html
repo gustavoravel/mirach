@@ -10,7 +10,7 @@
                 <h4><i class="fas fa-chart-line"></i> Nova Previsão</h4>
             </div>
             <div class="card-body">
-                <form method="post" id="predictionForm">
+                <form method="post" id="predictionForm" action="{% url 'predictions:create' %}">
                     {% csrf_token %}
                     <div class="row">
                         <div class="col-md-6">
@@ -19,7 +19,7 @@
                                 <select class="form-select" id="project" name="project" required>
                                     <option value="">Selecione um projeto</option>
                                     {% for project in projects %}
-                                        <option value="{{ project.pk }}">{{ project.name }}</option>
+                                        <option value="{{ project.pk }}" {% if forloop.first %}selected{% endif %}>{{ project.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -30,7 +30,7 @@
                                 <select class="form-select" id="dataset" name="dataset" required>
                                     <option value="">Selecione um dataset</option>
                                     {% for dataset in datasets %}
-                                        <option value="{{ dataset.pk }}">{{ dataset.name }}</option>
+                                        <option value="{{ dataset.pk }}" data-project="{{ dataset.project_id }}">{{ dataset.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -97,7 +97,7 @@
                                         <p class="card-text small">{{ model.description|truncatechars:80 }}</p>
                                         <div class="form-check">
                                             <input class="form-check-input" type="radio" name="model" 
-                                                   id="model_{{ model.pk }}" value="{{ model.pk }}">
+                                                   id="model_{{ model.pk }}" value="{{ model.pk }}" {% if forloop.first %}checked required{% endif %}>
                                             <label class="form-check-label" for="model_{{ model.pk }}">
                                                 Selecionar
                                             </label>
@@ -107,6 +107,12 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {% if plan_code == 'free' %}
+                        <div class="alert alert-info">
+                            Modelos avançados são Pro. Faça upgrade para desbloquear ARIMA sazonal avançado, LSTM, RandomForest, XGBoost, LightGBM, etc.
+                            <a href="#" data-bs-toggle="modal" data-bs-target="#pricingModal" class="alert-link">Ver planos</a>.
+                        </div>
+                        {% endif %}
                     </div>
                     
                     <div id="model-parameters" class="mb-4" style="display: none;">
@@ -178,6 +184,32 @@ function showModelParameters(modelId) {
 
 // Initialize
 updateTestSize();
+
+// Filter datasets by selected project
+const projectSelect = document.getElementById('project');
+const datasetSelect = document.getElementById('dataset');
+function filterDatasetsByProject() {
+    const pid = projectSelect.value;
+    const options = Array.from(datasetSelect.options);
+    let firstVisibleSet = false;
+    options.forEach(opt => {
+        if (!opt.value) return; // skip placeholder
+        const match = !pid || opt.getAttribute('data-project') === pid;
+        opt.hidden = !match;
+        if (match && !firstVisibleSet) {
+            datasetSelect.value = opt.value;
+            firstVisibleSet = true;
+        }
+    });
+    if (!firstVisibleSet) {
+        datasetSelect.value = '';
+    }
+}
+if (projectSelect && datasetSelect) {
+    projectSelect.addEventListener('change', filterDatasetsByProject);
+    // run once on load
+    filterDatasetsByProject();
+}
 </script>
 
 <style>

@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block title %}Exploração de Dados - {{ dataset.name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="mb-0"><i class="fas fa-database me-2"></i>Exploração: {{ dataset.name }}</h4>
+        <div>
+          <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Voltar</a>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row g-3 mb-3">
+          <div class="col-md-3">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted">Linhas</div>
+              <div class="h4 mb-0">{{ info.rows }}</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted">Colunas</div>
+              <div class="h4 mb-0">{{ info.cols }}</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100">
+              <div class="small text-muted">Colunas detectadas</div>
+              <div class="small mb-0">
+                {% for c in info.columns %}
+                  <span class="badge bg-secondary me-1 mb-1">{{ c.name }} <span class="text-muted">({{ c.dtype }})</span></span>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-lg-8">
+            <div class="card">
+              <div class="card-header"><i class="fas fa-table me-2"></i>Amostra (200 linhas)</div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table id="sampleTable" class="table table-sm table-striped align-middle"></table>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="card mb-3">
+              <div class="card-header"><i class="fas fa-chart-bar me-2"></i>Resumo estatístico</div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-sm">
+                    <tbody>
+                      {% for row in desc %}
+                      <tr>
+                        {% for cell in row %}
+                        <td class="small">{{ cell }}</td>
+                        {% endfor %}
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><i class="fas fa-chart-line me-2"></i>Distribuição (selecionar coluna)</div>
+              <div class="card-body">
+                <div class="input-group mb-2">
+                  <select id="columnSelect" class="form-select">
+                    {% for c in columns %}
+                    <option value="{{ c }}">{{ c }}</option>
+                    {% endfor %}
+                  </select>
+                  <button id="plotBtn" class="btn btn-primary">Plotar</button>
+                </div>
+                <div id="plot" style="height:300px;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<script>
+(function(){
+  const rows = {{ sample|safe }};
+  const columns = {{ columns|safe }};
+  // Build table
+  const table = document.getElementById('sampleTable');
+  const thead = document.createElement('thead');
+  const trh = document.createElement('tr');
+  columns.forEach(c=>{ const th=document.createElement('th'); th.textContent=c; trh.appendChild(th); });
+  thead.appendChild(trh);
+  const tbody = document.createElement('tbody');
+  rows.forEach(r=>{
+    const tr=document.createElement('tr');
+    columns.forEach(c=>{ const td=document.createElement('td'); td.textContent = (r[c]===undefined||r[c]===null)?'':r[c]; tr.appendChild(td); });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(thead); table.appendChild(tbody);
+
+  // Plot distribution
+  const select = document.getElementById('columnSelect');
+  const plotBtn = document.getElementById('plotBtn');
+  function plot(col){
+    const values = rows.map(r=>r[col]).filter(v=>v!==null && v!==undefined && v!=='' && !isNaN(Number(v))).map(Number);
+    if(values.length===0){ Plotly.purge('plot'); return; }
+    const trace = { x: values, type: 'histogram', marker:{color:'#667eea'} };
+    Plotly.newPlot('plot', [trace], {margin:{t:20}, xaxis:{title:col}, yaxis:{title:'Frequência'}});
+  }
+  plotBtn.addEventListener('click', ()=> plot(select.value));
+})();
+</script>
+{% endblock %}
+
+

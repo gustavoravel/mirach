@@ -4,6 +4,10 @@ from django.utils import timezone
 import uuid
 
 
+def generate_invite_token() -> str:
+    return uuid.uuid4().hex
+
+
 class Project(models.Model):
     """Modelo para projetos de previsão de séries temporais"""
     
@@ -58,7 +62,7 @@ class ProjectInvitation(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='invitations')
     email = models.EmailField()
     role = models.CharField(max_length=10, choices=ProjectMembership.ROLE_CHOICES, default='viewer')
-    token = models.CharField(max_length=64, default=lambda: uuid.uuid4().hex, unique=True)
+    token = models.CharField(max_length=64, default=generate_invite_token, unique=True)
     invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='project_invites_created')
     accepted_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='project_invites_accepted')
     created_at = models.DateTimeField(auto_now_add=True)

@@ -48,6 +48,9 @@
         {% endfor %}
       </select>
     </div>
+    {% if plan_code == 'free' %}
+    <div class="alert alert-info">Modelos avançados são Pro. <a href="#" data-bs-toggle="modal" data-bs-target="#pricingModal" class="alert-link">Veja planos</a>.</div>
+    {% endif %}
     <a class="btn btn-outline-secondary" href="?step=1">Voltar</a>
     <button class="btn btn-primary" type="submit">Continuar</button>
   </form>

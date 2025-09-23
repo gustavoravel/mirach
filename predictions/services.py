@@ -9,6 +9,8 @@ import json
 import io
 import base64
 from datetime import datetime, timedelta
+import os
+import math
 
 from .algorithms import create_forecaster, ModelEvaluator
 from .models import Prediction, PredictionModel, PredictionResult
@@ -36,11 +38,15 @@ class PredictionService:
     def prepare_data(self, dataset: Dataset) -> Tuple[pd.Series, List[str]]:
         """Prepare data from dataset for forecasting"""
         try:
-            # Read the dataset file
-            if dataset.file_type == '.xlsx' or dataset.file_type == '.xls':
-                df = pd.read_excel(dataset.file.path)
-            else:
-                raise ValueError(f"Unsupported file type: {dataset.file_type}")
+            # Read the dataset file (supports remote storage)
+            ext = (dataset.file_type or '').lower() or os.path.splitext(dataset.file.name)[1].lower()
+            with dataset.file.open('rb') as fh:
+                if ext in ['.xlsx', '.xls']:
+                    df = pd.read_excel(fh)
+                elif ext == '.csv':
+                    df = pd.read_csv(fh, low_memory=False)
+                else:
+                    raise ValueError(f"Unsupported file type: {ext}")
             
             # Get column mappings
             mappings = dataset.column_mappings.all()
@@ -62,13 +68,15 @@ class PredictionService:
                 raise ValueError("Timestamp and target columns must be mapped")
             
             # Convert timestamp column
-            df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+            df[timestamp_col] = pd.to_datetime(df[timestamp_col], errors='coerce')
             df = df.set_index(timestamp_col)
             
             # Sort by timestamp
             df = df.sort_index()
             
             # Get target series
+            # Coerce target to numeric to avoid string comparison errors in models
+            df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
             target_series = df[target_col].dropna()
             
             return target_series, feature_cols
@@ -136,6 +144,9 @@ class PredictionService:
             except Exception:
                 pass
 
+            # Sanitize metrics (replace NaN/Inf with None for JSON)
+            metrics = self._sanitize_json(metrics)
+
             # Create prediction results
             self._create_prediction_results(prediction, predictions, target_series)
             
@@ -143,14 +154,14 @@ class PredictionService:
             prediction.status = 'completed'
             prediction.completed_at = datetime.now()
             prediction.metrics = metrics
-            prediction.predictions_data = {
+            prediction.predictions_data = self._sanitize_json({
                 'forecast': predictions.tolist(),
                 'forecast_dates': self._generate_forecast_dates(
                     target_series.index[-1], 
                     prediction.prediction_horizon
                 ),
                 'fit_results': fit_results
-            }
+            })
             # Versioning snapshot (lightweight info)
             prediction.model_version = prediction.prediction_model.algorithm_type
             prediction.dataset_version = str(len(target_series))
@@ -179,12 +190,12 @@ class PredictionService:
             except Exception:
                 pass
             
-            return {
+            return self._sanitize_json({
                 'success': True,
                 'predictions': predictions.tolist(),
                 'metrics': metrics,
                 'fit_results': fit_results
-            }
+            })
             
         except Exception as e:
             prediction.status = 'failed'
@@ -195,6 +206,39 @@ class PredictionService:
                 'success': False,
                 'error': str(e)
             }
+
+    def _sanitize_json(self, obj: Any) -> Any:
+        """Recursively convert NaN/Inf to None and numpy types to native for JSONField."""
+        try:
+            if obj is None:
+                return None
+            if isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+                return float(obj)
+            if isinstance(obj, (int, str, bool)):
+                return obj
+            if isinstance(obj, (list, tuple)):
+                return [self._sanitize_json(x) for x in obj]
+            if isinstance(obj, dict):
+                return {k: self._sanitize_json(v) for k, v in obj.items()}
+            # numpy types
+            try:
+                import numpy as np  # local import safe
+                if isinstance(obj, (np.floating,)):
+                    val = float(obj)
+                    if math.isnan(val) or math.isinf(val):
+                        return None
+                    return val
+                if isinstance(obj, (np.integer,)):
+                    return int(obj)
+                if isinstance(obj, (np.ndarray,)):
+                    return [self._sanitize_json(x) for x in obj.tolist()]
+            except Exception:
+                pass
+            return obj
+        except Exception:
+            return obj
     
     def _create_prediction_results(self, prediction: Prediction, 
                                  forecasts: pd.Series, original_data: pd.Series):

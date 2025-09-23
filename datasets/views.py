@@ -4,6 +4,7 @@ from django.contrib import messages
 from .models import Dataset, ColumnMapping
 from django.http import JsonResponse
 from projects.models import ProjectMembership, Project
+from django.urls import reverse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from accounts.models import Subscription
@@ -51,6 +52,12 @@ def dataset_upload(request):
                 if sub and result.get('total_rows') and result['total_rows'] > sub.plan.max_rows_per_dataset:
                     messages.warning(request, f"Seu plano suporta até {sub.plan.max_rows_per_dataset} linhas por dataset. Faça upgrade para continuar.")
                     return redirect('accounts:profile')
+                try:
+                    # Garantir ponteiro no início ao salvar o arquivo no FileField
+                    if hasattr(file, 'seek'):
+                        file.seek(0)
+                except Exception:
+                    pass
                 dataset = Dataset.objects.create(
                     name=file.name,
                     project=project,
@@ -84,22 +91,17 @@ def dataset_upload(request):
                     validation = {'valid': False, 'errors': ['Mapeie timestamp e alvo'], 'warnings': []}
 
                 # Renderizar preview com primeiras linhas e informações detectadas
-                preview_html = result['dataframe'].head(10).to_html(classes='table table-sm table-striped', index=False)
-                detected = result.get('detected', {})
-                return render(request, 'datasets/preview.html', {
-                    'dataset': dataset,
-                    'preview_html': preview_html,
-                    'detected': detected,
-                    'validation': validation,
+                request.session[f'ds_preview_{dataset.pk}'] = {
+                    'detected': result.get('detected', {}),
                     'suggested_timestamp': suggested_timestamp,
                     'suggested_target': suggested_target,
-                })
+                }
+                return redirect('datasets:preview', pk=dataset.pk)
             else:
                 messages.error(request, f'Erro ao processar arquivo: {result["error"]}')
         else:
             messages.error(request, 'Projeto e arquivo são obrigatórios.')
     
-    from projects.models import Project
     projects = Project.objects.filter(owner=request.user, is_active=True)
     return render(request, 'datasets/upload.html', {'projects': projects})
 
@@ -112,6 +114,35 @@ def dataset_detail(request, pk):
         messages.error(request, 'Acesso negado a este dataset.')
         return redirect('datasets:list')
     return render(request, 'datasets/detail.html', {'dataset': dataset})
+
+
+@login_required
+def dataset_preview(request, pk):
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a este dataset.')
+        return redirect('datasets:list')
+    # Gera preview a partir do arquivo salvo
+    import pandas as pd
+    detected = request.session.get(f'ds_preview_{pk}', {}).get('detected', {})
+    suggested_timestamp = request.session.get(f'ds_preview_{pk}', {}).get('suggested_timestamp')
+    suggested_target = request.session.get(f'ds_preview_{pk}', {}).get('suggested_target')
+    try:
+        if dataset.file.name.lower().endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(dataset.file.path)
+        else:
+            df = pd.read_csv(dataset.file.path, low_memory=False)
+        preview_html = df.head(10).to_html(classes='table table-sm table-striped', index=False)
+    except Exception:
+        preview_html = '<div class="text-danger">Não foi possível gerar o preview.</div>'
+    return render(request, 'datasets/preview.html', {
+        'dataset': dataset,
+        'preview_html': preview_html,
+        'detected': detected,
+        'validation': {'valid': True, 'errors': [], 'warnings': []},
+        'suggested_timestamp': suggested_timestamp,
+        'suggested_target': suggested_target,
+    })
 
 
 @login_required
@@ -187,7 +218,15 @@ def dataset_process(request, pk):
 
 @login_required
 def dataset_backtest(request, pk):
-    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a este dataset.')
+        return redirect('datasets:list')
+    # Feature gate: somente planos pagos abrem backtest
+    from accounts.models import Subscription
+    sub = Subscription.current_for(request.user)
+    if sub and sub.plan.code == 'free':
+        return redirect(f"{reverse('datasets:detail', args=[pk])}?upgrade=1")
     # Proxy to predictions backtest API
     from predictions.views import backtest
     request.GET._mutable = True
@@ -195,6 +234,38 @@ def dataset_backtest(request, pk):
         request.GET.setlist('models', ['arima', 'ets', 'prophet'])
     return backtest(request, dataset_id=pk)
 
+
+@login_required
+def dataset_explore(request, pk):
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+        messages.error(request, 'Acesso negado a este dataset.')
+        return redirect('datasets:list')
+    import pandas as pd, io
+    try:
+        with dataset.file.open('rb') as fh:
+            content = fh.read()
+        if dataset.file.name.lower().endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            df = pd.read_csv(io.BytesIO(content), low_memory=False)
+    except Exception as e:
+        messages.error(request, f'Falha ao abrir dataset: {e}')
+        return redirect('datasets:detail', pk=pk)
+    sample = df.head(200)
+    info = {
+        'rows': int(df.shape[0]),
+        'cols': int(df.shape[1]),
+        'columns': [{'name': c, 'dtype': str(df[c].dtype)} for c in df.columns]
+    }
+    desc = sample.describe(include='all').replace({pd.NA: ''}).astype(str).reset_index().values.tolist()
+    return render(request, 'datasets/explore.html', {
+        'dataset': dataset,
+        'sample': sample.to_dict(orient='records'),
+        'columns': list(sample.columns),
+        'info': info,
+        'desc': desc,
+    })
 
 # Public API for datasets
 @api_view(['GET'])

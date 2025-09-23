@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+
+{% block title %}Excluir Previsão - Mirach{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header bg-danger">
+                <h4><i class="fas fa-trash"></i> Excluir Previsão</h4>
+            </div>
+            <div class="card-body">
+                <p>Tem certeza que deseja excluir a previsão <strong>{{ prediction.name }}</strong>? Esta ação não pode ser desfeita.</p>
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'predictions:detail' prediction.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Excluir definitivamente
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

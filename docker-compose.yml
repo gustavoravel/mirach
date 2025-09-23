@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
+    command: /bin/sh -c "python -m pip install --upgrade pip && python manage.py migrate --noinput && python manage.py seed_plans || true && python manage.py init_models || true && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
@@ -15,7 +15,7 @@ services:
 
   worker:
     build: .
-    command: celery -A setup worker -l info -Q predictions_default
+    command: /bin/sh -c "python -m pip install --upgrade pip && celery -A setup worker -l info -Q predictions_default -n worker_default@%h -Ofair"
     volumes:
       - .:/app
     env_file:
@@ -26,10 +26,10 @@ services:
 
   beat:
     build: .
-    command: celery -A setup beat -l info
+    command: /bin/sh -c "python -m pip install --upgrade pip && celery -A setup beat -l info"
   worker_high:
     build: .
-    command: celery -A setup worker -l info -Q predictions_high
+    command: /bin/sh -c "python -m pip install --upgrade pip && celery -A setup worker -l info -Q predictions_high -n worker_high@%h -Ofair"
     volumes:
       - .:/app
     env_file:
