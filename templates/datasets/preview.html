@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Preview do Dataset - Mirach{% endblock %}
+{% block content %}
+<h2 class="mb-3"><i class="fas fa-table"></i> Preview do Dataset</h2>
+<div class="alert {% if validation.valid %}alert-success{% else %}alert-warning{% endif %}">
+  {% if validation.valid %}
+  Dados validados. Você pode seguir para o mapeamento de colunas.
+  {% else %}
+  Foram encontrados pontos a revisar. Ajuste o mapeamento de colunas.
+  {% endif %}
+  {% if detected.encoding %}<div class="small mt-1">Encoding: {{ detected.encoding }}</div>{% endif %}
+  {% if detected.delimiter %}<div class="small">Separador: {{ detected.delimiter }}</div>{% endif %}
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><strong>Primeiras linhas</strong></div>
+  <div class="card-body">
+    <div class="table-responsive">{{ preview_html|safe }}</div>
+  </div>
+  <div class="card-footer d-flex gap-2">
+    <a href="{% url 'datasets:mapping' dataset.pk %}" class="btn btn-primary"><i class="fas fa-cogs me-1"></i> Mapear colunas</a>
+    <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-outline-secondary">Voltar</a>
+  </div>
+{% endblock %}
+
+

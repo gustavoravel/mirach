@@ -24,7 +24,7 @@ def dataset_upload(request):
         file = request.FILES.get('file')
         
         if project_id and file:
-            from .utils import process_excel_file, detect_time_series_columns, validate_time_series_data
+            from .utils import process_file, detect_time_series_columns, validate_time_series_data
             
             project = get_object_or_404(Project, pk=project_id)
             # Permissão: editor/owner
@@ -43,8 +43,8 @@ def dataset_upload(request):
                     messages.warning(request, 'Limite de datasets atingido no seu plano. Faça upgrade para continuar.')
                     return redirect('accounts:profile')
             
-            # Processar o arquivo Excel
-            result = process_excel_file(file)
+            # Processar o arquivo (Excel/CSV)
+            result = process_file(file)
             
             if result['success']:
                 # Max rows per dataset
@@ -80,15 +80,20 @@ def dataset_upload(request):
                 suggested_target = next((c for c, t in suggestions.items() if t == 'target'), None)
                 if suggested_timestamp and suggested_target:
                     validation = validate_time_series_data(result['dataframe'].copy(), suggested_timestamp, suggested_target)
-                    if not validation['valid']:
-                        messages.warning(request, 'Dados carregados com avisos/erros. Ajuste o mapeamento de colunas.')
-                    else:
-                        dataset.status = 'processed'
-                        dataset.save(update_fields=['status'])
-                        messages.success(request, 'Dataset carregado e validado com sucesso!')
                 else:
-                    messages.info(request, 'Dataset carregado. Confirme o mapeamento de colunas para processar.')
-                return redirect('datasets:detail', pk=dataset.pk)
+                    validation = {'valid': False, 'errors': ['Mapeie timestamp e alvo'], 'warnings': []}
+
+                # Renderizar preview com primeiras linhas e informações detectadas
+                preview_html = result['dataframe'].head(10).to_html(classes='table table-sm table-striped', index=False)
+                detected = result.get('detected', {})
+                return render(request, 'datasets/preview.html', {
+                    'dataset': dataset,
+                    'preview_html': preview_html,
+                    'detected': detected,
+                    'validation': validation,
+                    'suggested_timestamp': suggested_timestamp,
+                    'suggested_target': suggested_target,
+                })
             else:
                 messages.error(request, f'Erro ao processar arquivo: {result["error"]}')
         else:

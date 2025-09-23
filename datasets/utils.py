@@ -5,13 +5,35 @@ import os
 from typing import Dict, List, Tuple, Optional
 
 
-def process_excel_file(file: UploadedFile) -> Dict:
+def process_file(file: UploadedFile) -> Dict:
     """
-    Processa um arquivo Excel e retorna informações sobre o dataset
+    Processa um arquivo (Excel ou CSV) e retorna informações sobre o dataset
     """
     try:
-        # Ler o arquivo Excel
-        df = pd.read_excel(file)
+        ext = os.path.splitext(file.name)[1].lower()
+        detected = {'encoding': None, 'delimiter': None}
+        # Ler arquivo conforme extensão
+        if ext in ['.xlsx', '.xls']:
+            df = pd.read_excel(file)
+        elif ext == '.csv':
+            # Tentar detecção simples de encoding e delimitador
+            encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']
+            last_err = None
+            for enc in encodings:
+                try:
+                    file.seek(0)
+                    df = pd.read_csv(file, sep=None, engine='python', encoding=enc, low_memory=False)
+                    detected['encoding'] = enc
+                    # Tentar inferir separador do primeiro row/columns length
+                    detected['delimiter'] = getattr(df, 'attrs', {}).get('delimiter', None)
+                    break
+                except Exception as e:
+                    last_err = e
+                    continue
+            else:
+                raise last_err or ValueError('Falha ao ler CSV com encodings comuns')
+        else:
+            raise ValueError(f"Formato não suportado: {ext}")
         
         # Informações básicas
         total_rows = len(df)
@@ -54,7 +76,8 @@ def process_excel_file(file: UploadedFile) -> Dict:
             'column_names': column_names,
             'column_types': column_types,
             'statistics': stats,
-            'dataframe': df
+            'dataframe': df,
+            'detected': detected
         }
         
     except Exception as e:
@@ -62,6 +85,11 @@ def process_excel_file(file: UploadedFile) -> Dict:
             'success': False,
             'error': str(e)
         }
+
+
+# Backward compatibility
+def process_excel_file(file: UploadedFile) -> Dict:
+    return process_file(file)
 
 
 def detect_time_series_columns(df: pd.DataFrame) -> Dict[str, str]:
