@@ -18,16 +18,39 @@ def dataset_upload(request):
         
         if project_id and file:
             from projects.models import Project
+            from .utils import process_excel_file, detect_time_series_columns
+            
             project = get_object_or_404(Project, pk=project_id, owner=request.user)
             
-            dataset = Dataset.objects.create(
-                name=file.name,
-                project=project,
-                file=file,
-                uploaded_by=request.user
-            )
-            messages.success(request, 'Dataset carregado com sucesso!')
-            return redirect('datasets:detail', pk=dataset.pk)
+            # Processar o arquivo Excel
+            result = process_excel_file(file)
+            
+            if result['success']:
+                dataset = Dataset.objects.create(
+                    name=file.name,
+                    project=project,
+                    file=file,
+                    uploaded_by=request.user,
+                    total_rows=result['total_rows'],
+                    total_columns=result['total_columns'],
+                    column_names=result['column_names'],
+                    status='processed'
+                )
+                
+                # Criar sugestões de mapeamento de colunas
+                suggestions = detect_time_series_columns(result['dataframe'])
+                for col_name, col_type in suggestions.items():
+                    ColumnMapping.objects.create(
+                        dataset=dataset,
+                        column_name=col_name,
+                        column_type=col_type,
+                        data_type=result['column_types'].get(col_name, 'unknown')
+                    )
+                
+                messages.success(request, 'Dataset carregado e processado com sucesso!')
+                return redirect('datasets:detail', pk=dataset.pk)
+            else:
+                messages.error(request, f'Erro ao processar arquivo: {result["error"]}')
         else:
             messages.error(request, 'Projeto e arquivo são obrigatórios.')
     

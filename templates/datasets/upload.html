@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload Dataset - Mirach{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-upload"></i> Upload de Dataset</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="project" class="form-label">Projeto</label>
+                        <select class="form-select" id="project" name="project" required>
+                            <option value="">Selecione um projeto</option>
+                            {% for project in projects %}
+                                <option value="{{ project.pk }}">{{ project.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Selecione o projeto para este dataset.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Arquivo Excel</label>
+                        <input type="file" class="form-control" id="file" name="file" 
+                               accept=".xlsx,.xls" required>
+                        <div class="form-text">Formatos suportados: .xlsx, .xls</div>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Dica:</strong> Certifique-se de que sua planilha tem uma coluna de data/timestamp 
+                        e pelo menos uma coluna numérica para análise de séries temporais.
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'datasets:list' %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload"></i> Upload Dataset
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
