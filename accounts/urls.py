@@ -21,6 +21,8 @@ urlpatterns = [
     path('profile/edit/', views.edit_profile, name='edit_profile'),
     path('profile/api-token/new/', views.create_api_token, name='create_api_token'),
     path('profile/api-token/<str:key>/revoke/', views.revoke_api_token, name='revoke_api_token'),
+    path('settings/', views.settings_view, name='settings'),
+    path('billing/', views.billing_view, name='billing'),
     # Password reset
     path('password-reset/', auth_views.PasswordResetView.as_view(
         template_name='accounts/password_reset.html',

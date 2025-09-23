@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Pagamentos - Mirach{% endblock %}
+{% block content %}
+<h2><i class="fas fa-credit-card"></i> Pagamentos</h2>
+<div class="card mt-3">
+  <div class="card-body">
+    <p><strong>Plano atual:</strong> {{ subscription.plan.name }} ({{ subscription.plan.code }})</p>
+    {% if subscription.trial_ends_at %}
+    <p class="text-warning">Trial até {{ subscription.trial_ends_at|date:"d/m/Y" }}</p>
+    {% endif %}
+    <p><strong>Créditos:</strong> {{ credits.balance|default:0 }}</p>
+    <form method="post" class="mt-3">
+      {% csrf_token %}
+      <div class="row g-2">
+        <div class="col-md-4">
+          <select name="plan" class="form-select">
+            <option value="free">Free</option>
+            <option value="pro">Pro</option>
+            <option value="business">Business</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-primary">Atualizar plano</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+

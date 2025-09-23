@@ -19,7 +19,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.shortcuts import redirect, render
-from .views_admin import saas_dashboard
+from setup.views_admin import saas_dashboard
 
 urlpatterns = [
     path('admin/', admin.site.urls),

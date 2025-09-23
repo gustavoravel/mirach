@@ -78,3 +78,23 @@ def revoke_api_token(request, key):
             messages.error(request, 'Token não encontrado.')
         return redirect('accounts:profile')
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+@login_required
+def settings_view(request):
+    if request.method == 'POST':
+        # Placeholder for future settings save
+        messages.success(request, 'Configurações salvas.')
+        return redirect('accounts:settings')
+    return render(request, 'accounts/settings.html')
+
+
+@login_required
+def billing_view(request):
+    from .models import Subscription, Plan, CreditBalance
+    sub = Subscription.current_for(request.user)
+    credits = CreditBalance.objects.filter(user=request.user).first()
+    if request.method == 'POST':
+        messages.success(request, 'Plano atualizado (simulação).')
+        return redirect('accounts:billing')
+    return render(request, 'accounts/billing.html', {'subscription': sub, 'credits': credits})

@@ -16,6 +16,7 @@
     --border-radius: 15px;
     --border-radius-lg: 20px;
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --sidebar-width: 260px;
 }
 
 /* Global Styles */
@@ -199,6 +200,10 @@ body::before {
     backdrop-filter: blur(10px);
     border-right: 1px solid rgba(255, 255, 255, 0.2);
     box-shadow: var(--shadow-soft);
+}
+
+.sidebar.position-fixed {
+    width: var(--sidebar-width);
 }
 
 .list-group-item {
