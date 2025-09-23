@@ -4,6 +4,8 @@ from django.contrib.auth.models import User
 
 
 class EmailUserCreationForm(UserCreationForm):
+    # Override username to not be required (UserCreationForm defines it by default)
+    username = forms.CharField(required=False, widget=forms.HiddenInput(), initial='')
     email = forms.EmailField(required=True, label='E-mail')
 
     class Meta:
@@ -14,6 +16,11 @@ class EmailUserCreationForm(UserCreationForm):
         email = self.cleaned_data.get('email', '').strip().lower()
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('Já existe uma conta com este e-mail.')
+        return email
+
+    def clean_username(self):
+        # Use email as username for the default User model
+        email = self.cleaned_data.get('email', '').strip().lower()
         return email
 
     def save(self, commit=True):

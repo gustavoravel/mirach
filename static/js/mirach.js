@@ -80,13 +80,13 @@ function initCardInteractions() {
 }
 
 function initLoadingStates() {
-    // Add loading states to buttons
-    const buttons = document.querySelectorAll('button[type="submit"], .btn');
-    
-    buttons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            if (this.type === 'submit' || this.classList.contains('btn-primary')) {
-                showLoading(this);
+    // Add loading spinner on form submit without blocking submission
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function() {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                showLoading(submitBtn);
             }
         });
     });
@@ -120,17 +120,9 @@ function createRipple(event, element) {
 }
 
 function showLoading(button) {
-    const originalText = button.innerHTML;
+    button.dataset.originalText = button.dataset.originalText || button.innerHTML;
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
-    button.disabled = true;
     button.classList.add('loading');
-    
-    // Re-enable after 3 seconds (adjust as needed)
-    setTimeout(() => {
-        button.innerHTML = originalText;
-        button.disabled = false;
-        button.classList.remove('loading');
-    }, 3000);
 }
 
 // File upload enhancements

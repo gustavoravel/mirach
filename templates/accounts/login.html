@@ -18,12 +18,18 @@
                     <div class="card-body p-5">
                         <form method="post">
                             {% csrf_token %}
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                            {% endif %}
                             <div class="mb-4">
                                 <label for="id_username" class="form-label">
                                     <i class="fas fa-envelope me-2"></i>E-mail
                                 </label>
                                 <input type="email" class="form-control form-control-lg" id="id_username" name="username" 
                                        placeholder="Digite seu e-mail" required>
+                                {% if form.username.errors %}
+                                <div class="text-danger small mt-1">{{ form.username.errors|striptags }}</div>
+                                {% endif %}
                             </div>
                             <div class="mb-4">
                                 <label for="id_password" class="form-label">
@@ -31,6 +37,9 @@
                                 </label>
                                 <input type="password" class="form-control form-control-lg" id="id_password" name="password" 
                                        placeholder="Digite sua senha" required>
+                                {% if form.password.errors %}
+                                <div class="text-danger small mt-1">{{ form.password.errors|striptags }}</div>
+                                {% endif %}
                             </div>
                             <div class="d-grid mb-4">
                                 <button type="submit" class="btn btn-primary btn-lg">

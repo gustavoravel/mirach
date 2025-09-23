@@ -17,6 +17,9 @@ def signup(request):
             login(request, user)
             messages.success(request, 'Conta criada com sucesso!')
             return redirect('projects:list')
+        else:
+            # Exibir erros para facilitar o debug no front
+            messages.error(request, form.errors.as_text())
     else:
         form = EmailUserCreationForm()
     return render(request, 'accounts/signup.html', {'form': form})

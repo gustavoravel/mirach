@@ -18,12 +18,22 @@
                     <div class="card-body p-5">
                         <form method="post">
                             {% csrf_token %}
+                            {% if form.non_field_errors %}
+                            <div class="alert alert-danger">
+                                {{ form.non_field_errors }}
+                            </div>
+                            {% endif %}
+                            {# Campo username oculto necessário pelo UserCreationForm (preenchido com o e-mail) #}
+                            {{ form.username }}
                             <div class="mb-4">
                                 <label for="id_email" class="form-label">
                                     <i class="fas fa-envelope me-2"></i>E-mail
                                 </label>
                                 <input type="email" class="form-control form-control-lg" id="id_email" name="email" 
-                                       placeholder="seu@email.com" required>
+                                       value="{{ form.email.value|default:'' }}" placeholder="seu@email.com" required>
+                                {% if form.email.errors %}
+                                <div class="text-danger small mt-1">{{ form.email.errors|striptags }}</div>
+                                {% endif %}
                             </div>
                             <div class="mb-4">
                                 <label for="id_password1" class="form-label">
@@ -31,6 +41,9 @@
                                 </label>
                                 <input type="password" class="form-control form-control-lg" id="id_password1" name="password1" 
                                        placeholder="Crie uma senha segura" required>
+                                {% if form.password1.errors %}
+                                <div class="text-danger small mt-1">{{ form.password1.errors|striptags }}</div>
+                                {% endif %}
                             </div>
                             <div class="mb-4">
                                 <label for="id_password2" class="form-label">
@@ -38,6 +51,9 @@
                                 </label>
                                 <input type="password" class="form-control form-control-lg" id="id_password2" name="password2" 
                                        placeholder="Digite a senha novamente" required>
+                                {% if form.password2.errors %}
+                                <div class="text-danger small mt-1">{{ form.password2.errors|striptags }}</div>
+                                {% endif %}
                             </div>
                             <div class="d-grid mb-4">
                                 <button type="submit" class="btn btn-success btn-lg">
