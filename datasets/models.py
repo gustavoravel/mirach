@@ -29,7 +29,7 @@ class Dataset(models.Model):
     status = models.CharField(max_length=20, choices=FILE_STATUS_CHOICES, 
                              default='uploaded', verbose_name="Status")
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Carregado por")
-    uploaded_at = models.DateTimeField(default=timezone.now, verbose_name="Carregado em")
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Carregado em")
     processed_at = models.DateTimeField(null=True, blank=True, verbose_name="Processado em")
     error_message = models.TextField(blank=True, verbose_name="Mensagem de Erro")
     
@@ -71,7 +71,7 @@ class ColumnMapping(models.Model):
     is_required = models.BooleanField(default=False, verbose_name="Obrigatório")
     data_type = models.CharField(max_length=50, blank=True, verbose_name="Tipo de Dados")
     description = models.TextField(blank=True, verbose_name="Descrição")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     
     class Meta:
         verbose_name = "Mapeamento de Coluna"

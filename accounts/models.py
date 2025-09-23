@@ -19,7 +19,7 @@ class UserProfile(models.Model):
     email_notifications = models.BooleanField(default=True, verbose_name="Notificações por Email")
     
     # Metadados
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
     last_login_ip = models.GenericIPAddressField(null=True, blank=True, verbose_name="Último IP de Login")
     
@@ -61,7 +61,7 @@ class UserActivity(models.Model):
     description = models.TextField(verbose_name="Descrição")
     ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="Endereço IP")
     user_agent = models.TextField(blank=True, verbose_name="User Agent")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     
     class Meta:
         verbose_name = "Atividade do Usuário"

@@ -27,7 +27,7 @@ class PredictionModel(models.Model):
     description = models.TextField(verbose_name="Descrição")
     parameters = models.JSONField(default=dict, blank=True, verbose_name="Parâmetros")
     is_active = models.BooleanField(default=True, verbose_name="Ativo")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     
     class Meta:
         verbose_name = "Modelo de Previsão"
@@ -72,7 +72,7 @@ class Prediction(models.Model):
     
     # Metadados
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Criado por")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     completed_at = models.DateTimeField(null=True, blank=True, verbose_name="Concluído em")
     error_message = models.TextField(blank=True, verbose_name="Mensagem de Erro")
     

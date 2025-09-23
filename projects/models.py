@@ -9,7 +9,7 @@ class Project(models.Model):
     name = models.CharField(max_length=200, verbose_name="Nome do Projeto")
     description = models.TextField(blank=True, verbose_name="Descrição")
     owner = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Proprietário")
-    created_at = models.DateTimeField(default=timezone.now, verbose_name="Criado em")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
     is_active = models.BooleanField(default=True, verbose_name="Ativo")
     
