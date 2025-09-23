@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+
+{% block title %}Nova Previsão - Mirach{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h4><i class="fas fa-chart-line"></i> Nova Previsão</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" id="predictionForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="project" class="form-label">Projeto</label>
+                                <select class="form-select" id="project" name="project" required>
+                                    <option value="">Selecione um projeto</option>
+                                    {% for project in projects %}
+                                        <option value="{{ project.pk }}">{{ project.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="dataset" class="form-label">Dataset</label>
+                                <select class="form-select" id="dataset" name="dataset" required>
+                                    <option value="">Selecione um dataset</option>
+                                    {% for dataset in datasets %}
+                                        <option value="{{ dataset.pk }}">{{ dataset.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Nome da Previsão</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="prediction_horizon" class="form-label">Horizonte de Previsão</label>
+                                <input type="number" class="form-control" id="prediction_horizon" name="prediction_horizon" 
+                                       min="1" max="365" value="30" required>
+                                <div class="form-text">Número de períodos a prever</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="train_size" class="form-label">Tamanho do Treino</label>
+                                <input type="range" class="form-range" id="train_size" name="train_size" 
+                                       min="0.5" max="0.9" step="0.05" value="0.8" 
+                                       oninput="updateTrainSize(this.value)">
+                                <div class="form-text">Treino: <span id="train_size_display">80%</span></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="validation_size" class="form-label">Tamanho da Validação</label>
+                                <input type="range" class="form-range" id="validation_size" name="validation_size" 
+                                       min="0.05" max="0.3" step="0.05" value="0.1" 
+                                       oninput="updateValidationSize(this.value)">
+                                <div class="form-text">Validação: <span id="validation_size_display">10%</span></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label class="form-label">Tamanho do Teste</label>
+                                <div class="form-control-plaintext">
+                                    Teste: <span id="test_size_display">10%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="form-label">Algoritmo de Previsão</label>
+                        <div class="row" id="model-selection">
+                            {% for model in models %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card model-card" data-model-id="{{ model.pk }}">
+                                    <div class="card-body text-center">
+                                        <div class="model-icon mb-2">
+                                            <i class="fas fa-{{ model.algorithm_type|default:'chart-line' }}"></i>
+                                        </div>
+                                        <h6 class="card-title">{{ model.name }}</h6>
+                                        <p class="card-text small">{{ model.description|truncatechars:80 }}</p>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="model" 
+                                                   id="model_{{ model.pk }}" value="{{ model.pk }}">
+                                            <label class="form-check-label" for="model_{{ model.pk }}">
+                                                Selecionar
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div id="model-parameters" class="mb-4" style="display: none;">
+                        <h6>Parâmetros do Modelo</h6>
+                        <div id="parameters-container"></div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'predictions:list' %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-arrow-left"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Criar Previsão
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateTrainSize(value) {
+    document.getElementById('train_size_display').textContent = Math.round(value * 100) + '%';
+    updateTestSize();
+}
+
+function updateValidationSize(value) {
+    document.getElementById('validation_size_display').textContent = Math.round(value * 100) + '%';
+    updateTestSize();
+}
+
+function updateTestSize() {
+    const trainSize = parseFloat(document.getElementById('train_size').value);
+    const valSize = parseFloat(document.getElementById('validation_size').value);
+    const testSize = 1 - trainSize - valSize;
+    document.getElementById('test_size_display').textContent = Math.round(testSize * 100) + '%';
+}
+
+// Model selection
+document.querySelectorAll('input[name="model"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        if (this.checked) {
+            // Remove active class from all cards
+            document.querySelectorAll('.model-card').forEach(card => {
+                card.classList.remove('border-primary');
+            });
+            
+            // Add active class to selected card
+            this.closest('.model-card').classList.add('border-primary');
+            
+            // Show parameters
+            showModelParameters(this.value);
+        }
+    });
+});
+
+function showModelParameters(modelId) {
+    // This would typically fetch parameters via AJAX
+    // For now, we'll show a simple message
+    const parametersDiv = document.getElementById('model-parameters');
+    const container = document.getElementById('parameters-container');
+    
+    parametersDiv.style.display = 'block';
+    container.innerHTML = '<p class="text-muted">Parâmetros padrão serão utilizados. Você pode ajustá-los após criar a previsão.</p>';
+}
+
+// Initialize
+updateTestSize();
+</script>
+
+<style>
+.model-card {
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.model-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.model-card.border-primary {
+    border-color: #667eea !important;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+.model-icon {
+    width: 50px;
+    height: 50px;
+    background: var(--primary-gradient);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: white;
+    font-size: 1.2rem;
+}
+
+.form-range {
+    background: linear-gradient(to right, #667eea 0%, #764ba2 100%);
+}
+
+.form-range::-webkit-slider-thumb {
+    background: #667eea;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.form-range::-moz-range-thumb {
+    background: #667eea;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+</style>
+{% endblock %}

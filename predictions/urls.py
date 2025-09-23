@@ -11,4 +11,10 @@ urlpatterns = [
     path('<int:pk>/results/', views.prediction_results, name='results'),
     path('<int:pk>/delete/', views.prediction_delete, name='delete'),
     path('models/', views.prediction_models, name='models'),
+    
+    # API endpoints
+    path('api/recommendations/<int:dataset_id>/', views.get_model_recommendations, name='recommendations'),
+    path('api/compare/<int:dataset_id>/', views.compare_models, name='compare'),
+    path('api/visualization/<int:pk>/', views.get_visualization_data, name='visualization'),
+    path('api/status/<int:pk>/', views.prediction_status, name='status'),
 ]

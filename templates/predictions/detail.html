@@ -1,0 +1,329 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ prediction.name }} - Mirach{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="text-gradient mb-2">
+            <i class="fas fa-chart-line me-3"></i>{{ prediction.name }}
+        </h2>
+        <p class="text-muted mb-0">
+            <strong>Modelo:</strong> {{ prediction.prediction_model.name }} | 
+            <strong>Dataset:</strong> {{ prediction.dataset.name }} |
+            <strong>Status:</strong> 
+            <span class="badge bg-{% if prediction.status == 'completed' %}success{% elif prediction.status == 'training' %}warning{% elif prediction.status == 'failed' %}danger{% else %}secondary{% endif %}">
+                {{ prediction.get_status_display }}
+            </span>
+        </p>
+    </div>
+    <div class="btn-group">
+        {% if prediction.status == 'pending' %}
+            <a href="{% url 'predictions:run' prediction.pk %}" class="btn btn-primary">
+                <i class="fas fa-play"></i> Executar Previsão
+            </a>
+        {% elif prediction.status == 'completed' %}
+            <a href="{% url 'predictions:results' prediction.pk %}" class="btn btn-success">
+                <i class="fas fa-chart-bar"></i> Ver Resultados
+            </a>
+        {% endif %}
+        <a href="{% url 'predictions:delete' prediction.pk %}" class="btn btn-outline-danger">
+            <i class="fas fa-trash"></i> Excluir
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Informações da Previsão -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6><i class="fas fa-info-circle"></i> Informações</h6>
+            </div>
+            <div class="card-body">
+                <div class="info-item mb-3">
+                    <strong>Projeto:</strong><br>
+                    <span class="text-muted">{{ prediction.project.name }}</span>
+                </div>
+                <div class="info-item mb-3">
+                    <strong>Dataset:</strong><br>
+                    <span class="text-muted">{{ prediction.dataset.name }}</span>
+                </div>
+                <div class="info-item mb-3">
+                    <strong>Algoritmo:</strong><br>
+                    <span class="text-muted">{{ prediction.prediction_model.name }}</span>
+                </div>
+                <div class="info-item mb-3">
+                    <strong>Horizonte:</strong><br>
+                    <span class="text-muted">{{ prediction.prediction_horizon }} períodos</span>
+                </div>
+                <div class="info-item mb-3">
+                    <strong>Divisão dos Dados:</strong><br>
+                    <div class="progress mb-1" style="height: 8px;">
+                        <div class="progress-bar bg-primary" style="width: {{ prediction.train_size|floatformat:0|add:0 }}%"></div>
+                        <div class="progress-bar bg-warning" style="width: {{ prediction.validation_size|floatformat:0|add:0 }}%"></div>
+                        <div class="progress-bar bg-info" style="width: {{ prediction.test_size|floatformat:0|add:0 }}%"></div>
+                    </div>
+                    <small class="text-muted">
+                        Treino: {{ prediction.train_size|floatformat:0|add:0 }}% | 
+                        Validação: {{ prediction.validation_size|floatformat:0|add:0 }}% | 
+                        Teste: {{ prediction.test_size|floatformat:0|add:0 }}%
+                    </small>
+                </div>
+                <div class="info-item mb-3">
+                    <strong>Criado em:</strong><br>
+                    <span class="text-muted">{{ prediction.created_at|date:"d/m/Y H:i" }}</span>
+                </div>
+                {% if prediction.completed_at %}
+                <div class="info-item">
+                    <strong>Concluído em:</strong><br>
+                    <span class="text-muted">{{ prediction.completed_at|date:"d/m/Y H:i" }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Métricas -->
+        {% if prediction.status == 'completed' and prediction.metrics %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6><i class="fas fa-chart-bar"></i> Métricas de Performance</h6>
+            </div>
+            <div class="card-body">
+                <div class="metric-item">
+                    <div class="metric-label">RMSE</div>
+                    <div class="metric-value">{{ prediction.metrics.rmse|floatformat:2 }}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">MAE</div>
+                    <div class="metric-value">{{ prediction.metrics.mae|floatformat:2 }}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">MAPE</div>
+                    <div class="metric-value">{{ prediction.metrics.mape|floatformat:2 }}%</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">R²</div>
+                    <div class="metric-value">{{ prediction.metrics.r2|floatformat:3 }}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Visualização -->
+    <div class="col-lg-8">
+        {% if prediction.status == 'completed' %}
+            <div class="card">
+                <div class="card-header">
+                    <h6><i class="fas fa-chart-line"></i> Gráfico de Previsão</h6>
+                </div>
+                <div class="card-body">
+                    <div id="predictionChart" style="height: 400px;"></div>
+                </div>
+            </div>
+        {% elif prediction.status == 'training' %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Processando...</span>
+                    </div>
+                    <h5>Processando Previsão...</h5>
+                    <p class="text-muted">Isso pode levar alguns minutos dependendo do tamanho dos dados.</p>
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+        {% elif prediction.status == 'failed' %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                    <h5>Erro na Previsão</h5>
+                    <p class="text-muted">{{ prediction.error_message }}</p>
+                    <a href="{% url 'predictions:run' prediction.pk %}" class="btn btn-primary">
+                        <i class="fas fa-redo"></i> Tentar Novamente
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-play-circle fa-3x text-muted mb-3"></i>
+                    <h5>Previsão Pronta para Execução</h5>
+                    <p class="text-muted">Clique em "Executar Previsão" para começar o processamento.</p>
+                    <a href="{% url 'predictions:run' prediction.pk %}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-play"></i> Executar Previsão
+                    </a>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Parâmetros do Modelo -->
+{% if prediction.model_parameters %}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-cogs"></i> Parâmetros do Modelo</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for key, value in prediction.model_parameters.items %}
+                    <div class="col-md-3 mb-2">
+                        <strong>{{ key|title }}:</strong> 
+                        <span class="text-muted">{{ value }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+{% if prediction.status == 'completed' %}
+// Load visualization data and create chart
+fetch('{% url "predictions:visualization" prediction.pk %}')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            createPredictionChart(data.data);
+        } else {
+            console.error('Error loading visualization data:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+
+function createPredictionChart(data) {
+    const ctx = document.getElementById('predictionChart').getContext('2d');
+    
+    const chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [...data.historical.dates, ...data.forecast.dates],
+            datasets: [{
+                label: 'Dados Históricos',
+                data: [...data.historical.values, ...new Array(data.forecast.values.length).fill(null)],
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                tension: 0.4,
+                fill: true
+            }, {
+                label: 'Previsão',
+                data: [...new Array(data.historical.values.length).fill(null), ...data.forecast.values],
+                borderColor: '#f5576c',
+                backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                borderDash: [5, 5],
+                tension: 0.4,
+                fill: false
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: `Previsão com ${data.model_name}`
+                },
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                },
+                x: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.1)'
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    radius: 3
+                }
+            }
+        }
+    });
+}
+{% elif prediction.status == 'training' %}
+// Poll for status updates
+function checkStatus() {
+    fetch('{% url "predictions:status" prediction.pk %}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'completed' || data.status === 'failed') {
+                location.reload();
+            } else {
+                setTimeout(checkStatus, 2000);
+            }
+        })
+        .catch(error => {
+            console.error('Error checking status:', error);
+            setTimeout(checkStatus, 5000);
+        });
+}
+
+// Start polling
+setTimeout(checkStatus, 2000);
+{% endif %}
+</script>
+
+<style>
+.info-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.metric-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.metric-item:last-child {
+    border-bottom: none;
+}
+
+.metric-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.metric-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #667eea;
+}
+
+.progress {
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
+</style>
+{% endblock %}
