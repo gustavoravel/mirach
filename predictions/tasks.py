@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from celery import shared_task
+from celery.utils.log import get_task_logger
+from django.conf import settings
 
 
 @shared_task(bind=True)
@@ -16,6 +18,7 @@ def run_prediction_task(self, prediction_id: int) -> dict:
     prediction.save(update_fields=['status', 'progress'])
 
     service = PredictionService()
+    # Route by priority (example hook; actual queue selection done by Celery routing)
     result = service.run_prediction(prediction)
 
     if result.get('success'):

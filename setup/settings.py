@@ -43,6 +43,8 @@ env = environ.Env(
     EMAIL_HOST_USER=(str, ''),
     EMAIL_HOST_PASSWORD=(str, ''),
     EMAIL_USE_TLS=(bool, True),
+    # Cache
+    CACHE_URL=(str, ''),
 )
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
@@ -136,6 +138,11 @@ CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
 CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=False)
 CELERY_TASK_TIME_LIMIT = env.int('CELERY_TASK_TIME_LIMIT', default=60 * 30)
 CELERY_TASK_SOFT_TIME_LIMIT = env.int('CELERY_TASK_SOFT_TIME_LIMIT', default=60 * 25)
+CELERY_TASK_ROUTES = {
+    'predictions.tasks.run_prediction_task': {
+        'queue': 'predictions_high' if env.bool('PREDICTIONS_HIGH_PRIORITY', default=False) else 'predictions_default'
+    }
+}
 
 
 # Database
@@ -220,16 +227,38 @@ if EMAIL_BACKEND != 'django.core.mail.backends.console.EmailBackend':
     EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
     EMAIL_USE_TLS = env('EMAIL_USE_TLS')
 
+# Cache
+if env('CACHE_URL'):
+    CACHES = {
+        'default': env.cache('CACHE_URL')
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'mirach-local-cache'
+        }
+    }
+
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
+        'accounts.auth.TokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': env('DRF_USER_RATE', default='1000/day'),
+        'anon': env('DRF_ANON_RATE', default='100/day'),
+    }
 }
 
 # Default primary key field type

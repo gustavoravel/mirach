@@ -13,6 +13,8 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Criado em")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Atualizado em")
     is_active = models.BooleanField(default=True, verbose_name="Ativo")
+    webhook_url = models.URLField(blank=True, verbose_name="Webhook de Conclusão")
+    priority = models.IntegerField(default=0, verbose_name="Prioridade do Projeto")
     
     class Meta:
         verbose_name = "Projeto"

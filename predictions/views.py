@@ -3,6 +3,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.http import HttpResponse
+from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.throttling import UserRateThrottle
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -13,6 +16,8 @@ from datasets.models import Dataset
 from projects.models import ProjectMembership
 from .algorithms import create_forecaster
 import numpy as np
+from django.urls import reverse
+from django.views.decorators.cache import cache_page
 
 
 @login_required
@@ -95,6 +100,7 @@ def prediction_create(request):
 
 
 @login_required
+@cache_page(30)
 def prediction_detail(request, pk):
     prediction = get_object_or_404(Prediction, pk=pk)
     if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
@@ -312,12 +318,17 @@ def backtest(request, dataset_id):
 def get_visualization_data(request, pk):
     """Get visualization data for a prediction"""
     try:
+        from django.core.cache import cache
         prediction = get_object_or_404(Prediction, pk=pk)
         if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
             return JsonResponse({'error': 'Acesso negado'})
+        cache_key = f"api:viz:{request.user.id}:{prediction.id}:{prediction.status}:{prediction.completed_at.isoformat() if prediction.completed_at else 'na'}"
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse(cached)
         service = PredictionService()
         result = service.create_visualization_data(prediction)
-        
+        cache.set(cache_key, result, 60)
         return JsonResponse(result)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
@@ -371,3 +382,132 @@ def export_results_json(request, pk):
         for r in prediction.results.all()
     ]
     return JsonResponse({'results': data})
+
+
+# Public API (Token auth)
+class APIDefaultThrottle(UserRateThrottle):
+    scope = 'user'
+
+
+@api_view(['GET'])
+@authentication_classes([])
+@permission_classes([])
+def api_ping(request):
+    return JsonResponse({'pong': True})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([APIDefaultThrottle])
+def api_list_predictions(request):
+    from django.core.cache import cache
+    cache_key = f"api:preds:{request.user.id}"
+    data = cache.get(cache_key)
+    if not data:
+        member_project_ids = ProjectMembership.objects.filter(user=request.user).values_list('project_id', flat=True)
+        qs = Prediction.objects.filter(project_id__in=member_project_ids).order_by('-created_at')[:100]
+        data = {'predictions': [
+            {'id': p.id, 'name': p.name, 'status': p.status, 'project_id': p.project_id}
+            for p in qs
+        ]}
+        cache.set(cache_key, data, 30)  # 30s
+    return JsonResponse(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([APIDefaultThrottle])
+def api_prediction_detail(request, pk):
+    p = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=p.project, user=request.user).exists():
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    from django.core.cache import cache
+    cache_key = f"api:pred:{request.user.id}:{p.id}"
+    cached = cache.get(cache_key)
+    if cached:
+        return JsonResponse(cached)
+    payload = {
+        'id': p.id,
+        'name': p.name,
+        'status': p.status,
+        'metrics': p.metrics,
+        'explainability': p.explainability,
+        'model_version': p.model_version,
+        'dataset_version': p.dataset_version,
+        'results_url_csv': request.build_absolute_uri(reverse('predictions:export_csv', args=[p.id])),
+        'results_url_json': request.build_absolute_uri(reverse('predictions:export_json', args=[p.id])),
+    }
+    cache.set(cache_key, payload, 60)  # 60s
+    return JsonResponse(payload)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([APIDefaultThrottle])
+def api_create_prediction(request):
+    try:
+        dataset_id = request.data.get('dataset_id')
+        model_id = request.data.get('model_id')
+        model_type = request.data.get('model_type')
+        name = request.data.get('name') or 'API Prediction'
+        horizon = int(request.data.get('prediction_horizon') or 12)
+        train_size = float(request.data.get('train_size') or 0.8)
+        validation_size = float(request.data.get('validation_size') or 0.1)
+        params = request.data.get('params') or {}
+
+        if not dataset_id:
+            return JsonResponse({'error': 'dataset_id is required'}, status=400)
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        if not ProjectMembership.objects.filter(project=dataset.project, user=request.user, role__in=['owner','editor']).exists():
+            return JsonResponse({'error': 'forbidden'}, status=403)
+        if model_id:
+            model = get_object_or_404(PredictionModel, pk=model_id)
+        elif model_type:
+            model = get_object_or_404(PredictionModel, algorithm_type=model_type, is_active=True)
+        else:
+            return JsonResponse({'error': 'model_id or model_type is required'}, status=400)
+
+        model_parameters = model.parameters.copy()
+        if isinstance(params, dict):
+            model_parameters.update(params)
+
+        prediction = Prediction.objects.create(
+            name=name,
+            project=dataset.project,
+            dataset=dataset,
+            prediction_model=model,
+            prediction_horizon=horizon,
+            train_size=train_size,
+            validation_size=validation_size,
+            test_size=1.0 - train_size - validation_size,
+            model_parameters=model_parameters,
+            created_by=request.user
+        )
+        run_prediction_task.delay(prediction.id)
+        return JsonResponse({
+            'success': True,
+            'prediction_id': prediction.id,
+            'status_url': request.build_absolute_uri(reverse('predictions:api_prediction_detail', args=[prediction.id]))
+        }, status=201)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([APIDefaultThrottle])
+def api_prediction_results(request, pk):
+    p = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=p.project, user=request.user).exists():
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    data = [
+        {
+            'timestamp': r.timestamp.isoformat(),
+            'predicted_value': r.predicted_value,
+            'actual_value': r.actual_value,
+            'ci_lower': r.confidence_interval_lower,
+            'ci_upper': r.confidence_interval_upper,
+        }
+        for r in p.results.all()
+    ]
+    return JsonResponse({'prediction_id': p.id, 'results': data})

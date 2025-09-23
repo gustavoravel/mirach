@@ -15,7 +15,7 @@ services:
 
   worker:
     build: .
-    command: celery -A setup worker -l info
+    command: celery -A setup worker -l info -Q predictions_default
     volumes:
       - .:/app
     env_file:
@@ -27,6 +27,9 @@ services:
   beat:
     build: .
     command: celery -A setup beat -l info
+  worker_high:
+    build: .
+    command: celery -A setup worker -l info -Q predictions_high
     volumes:
       - .:/app
     env_file:
