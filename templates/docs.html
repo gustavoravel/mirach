@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Docs da API - Mirach{% endblock %}
+
+{% block content %}
+<h2 class="mb-3"><i class="fas fa-book"></i> Documentação da API</h2>
+<p>Autenticação via header: <code>Authorization: Token &lt;seu_token&gt;</code></p>
+
+<h5>Endpoints</h5>
+<ul>
+  <li><code>GET /predictions/api/ping/</code> — healthcheck</li>
+  <li><code>GET /predictions/api/v1/predictions/</code> — lista últimas previsões do usuário</li>
+  <li><code>GET /predictions/api/v1/predictions/&lt;id&gt;/</code> — detalhe (métricas, explainability, links de export)</li>
+</ul>
+
+<h5>Rate limiting</h5>
+<p>Configurável por env (DRF_USER_RATE, DRF_ANON_RATE). Padrão: 1000/day por usuário.</p>
+
+<h5>Webhooks</h5>
+<p>Configure <strong>Webhook de Conclusão</strong> no projeto. Evento enviado: <code>prediction.completed</code>.</p>
+
+<pre class="bg-light p-3 rounded"><code>{
+  "event": "prediction.completed",
+  "prediction_id": 123,
+  "project_id": 45,
+  "status": "completed",
+  "metrics": {"rmse": 12.3, "mae": 9.8, "mape": 7.1, "r2": 0.82},
+  "completed_at": "2025-09-23T13:37:00Z"
+}</code></pre>
+
+{% endblock %}
+
+

@@ -1,5 +1,25 @@
 from django.db import models
 from django.contrib.auth.models import User
+import secrets
+
+
+class APIToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='api_tokens')
+    name = models.CharField(max_length=100, blank=True)
+    key = models.CharField(max_length=40, unique=True, db_index=True)
+    scopes = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            self.key = secrets.token_hex(20)
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.name or self.key[:6]}"
+from django.contrib.auth.models import User
 from django.utils import timezone
 
 

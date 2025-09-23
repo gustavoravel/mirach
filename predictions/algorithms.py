@@ -643,4 +643,12 @@ def create_forecaster(model_type: str, **kwargs) -> BaseForecaster:
     if model_type not in model_map:
         raise ValueError(f"Unknown model type: {model_type}")
     
-    return model_map[model_type](**kwargs)
+    ctor = model_map[model_type]
+    # Harmonize basic params
+    if model_type == 'ets':
+        allowed = {'trend', 'seasonal', 'seasonal_periods'}
+        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+    if model_type == 'arima':
+        allowed = {'order', 'seasonal_order'}
+        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
+    return ctor(**kwargs)

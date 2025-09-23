@@ -162,6 +162,22 @@ class PredictionService:
                 }
             prediction.explainability = explanation
             prediction.save()
+            # Webhook notification
+            try:
+                project = prediction.project
+                if getattr(project, 'webhook_url', None):
+                    import requests
+                    payload = {
+                        'event': 'prediction.completed',
+                        'prediction_id': prediction.id,
+                        'project_id': project.id,
+                        'status': prediction.status,
+                        'metrics': metrics,
+                        'completed_at': prediction.completed_at.isoformat(),
+                    }
+                    requests.post(project.webhook_url, json=payload, timeout=5)
+            except Exception:
+                pass
             
             return {
                 'success': True,

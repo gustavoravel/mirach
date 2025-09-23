@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from rest_framework import routers
+from django.urls import include
 
 app_name = 'predictions'
 
@@ -21,4 +23,11 @@ urlpatterns = [
     path('api/status/<int:pk>/', views.prediction_status, name='status'),
     path('api/export/<int:pk>/csv/', views.export_results_csv, name='export_csv'),
     path('api/export/<int:pk>/json/', views.export_results_json, name='export_json'),
+    # Public API
+    path('api/ping/', views.api_ping, name='api_ping'),
+    path('api/v1/predictions/', views.api_list_predictions, name='api_list_predictions'),
+    path('api/v1/predictions/<int:pk>/', views.api_prediction_detail, name='api_prediction_detail'),
+    path('api/v1/predictions/create', views.api_create_prediction, name='api_create_prediction'),
+    path('api/v1/predictions/<int:pk>/results', views.api_prediction_results, name='api_prediction_results'),
 ]
+

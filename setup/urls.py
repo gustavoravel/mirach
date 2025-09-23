@@ -18,7 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -27,6 +27,7 @@ urlpatterns = [
     path('datasets/', include('datasets.urls')),
     path('predictions/', include('predictions.urls')),
     path('', include('accounts.urls')),  # Landing page and auth
+    path('docs/', lambda request: render(request, 'docs.html'), name='docs'),
 ]
 
 # Serve media files in development

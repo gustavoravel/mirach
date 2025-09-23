@@ -4,6 +4,8 @@ from django.contrib import messages
 from .models import Dataset, ColumnMapping
 from django.http import JsonResponse
 from projects.models import ProjectMembership, Project
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
 
 @login_required
@@ -172,3 +174,15 @@ def dataset_backtest(request, pk):
     if 'models' not in request.GET:
         request.GET.setlist('models', ['arima', 'ets', 'prophet'])
     return backtest(request, dataset_id=pk)
+
+
+# Public API for datasets
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def api_list_datasets(request):
+    member_project_ids = ProjectMembership.objects.filter(user=request.user).values_list('project_id', flat=True)
+    qs = Dataset.objects.filter(project_id__in=member_project_ids).order_by('-uploaded_at')[:100]
+    return JsonResponse({'datasets': [
+        {'id': d.id, 'name': d.name, 'project_id': d.project_id, 'rows': d.total_rows, 'cols': d.total_columns}
+        for d in qs
+    ]})

@@ -12,4 +12,6 @@ urlpatterns = [
     path('<int:pk>/mapping/', views.column_mapping, name='mapping'),
     path('<int:pk>/process/', views.dataset_process, name='process'),
     path('<int:pk>/backtest/', views.dataset_backtest, name='backtest'),
+    # API
+    path('api/v1/datasets/', views.api_list_datasets, name='api_list_datasets'),
 ]
