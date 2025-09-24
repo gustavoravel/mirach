@@ -73,6 +73,40 @@ body::before {
     text-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
+/* Improve readability of muted text on gradient/dark headers */
+.card-header .text-muted,
+.navbar .text-muted,
+.hero-section .text-muted,
+.algorithms-section .text-muted,
+.cta-card .text-muted,
+.list-group-item .text-muted,
+.table thead .text-muted,
+.dropdown-menu .text-muted {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Slightly darker default muted text for better contrast on light backgrounds */
+.text-muted { color: #4a5560 !important; }
+
+/* Muted links remain readable on gradients */
+.text-muted a,
+.card-header .text-muted a,
+.navbar .text-muted a,
+.hero-section .text-muted a {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Ensure header actions/links are readable on gradient headers */
+.card-header a,
+.card-header .link-secondary,
+.card-header .text-secondary,
+.card-header .btn-link {
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Do NOT invert muted text inside card bodies (keep dark for white backgrounds) */
+.card-body .text-muted { color: #4a5560 !important; }
+
 .nav-link {
     color: rgba(255, 255, 255, 0.9) !important;
     font-weight: 500;
@@ -103,6 +137,37 @@ body::before {
     transform: translateY(-5px);
     box-shadow: var(--shadow-medium);
     border-color: rgba(102, 126, 234, 0.3);
+}
+
+/* Suppress click glow/ripple inside cards */
+.card:active {
+    transform: none !important;
+    box-shadow: var(--shadow-soft) !important;
+}
+.card *:focus,
+.card *:active,
+.card *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    background-image: none !important;
+    filter: none !important;
+    transform: none !important;
+}
+
+/* Extra hardening for headers and bodies */
+.card-header, .card-header *,
+.card-body, .card-body * {
+    -webkit-tap-highlight-color: transparent;
+}
+
+.card-header *:focus, .card-header *:active,
+.card-body *:focus, .card-body *:active,
+.card-header *:focus-visible, .card-body *:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    background-image: none !important;
+    filter: none !important;
+    transform: none !important;
 }
 
 .card-header {
@@ -141,6 +206,35 @@ body::before {
     box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
 }
 
+/* Hard-disable any ripple/glow/focus ring on interactive elements */
+a, button, .btn, .nav-link, .dropdown-item, .list-group-item, .form-control, .form-select,
+input, select, textarea, .card, .card * {
+    -webkit-tap-highlight-color: transparent !important;
+}
+
+a:focus, a:active,
+button:focus, button:active,
+.btn:focus, .btn:active,
+.btn:focus-visible, .btn:active:focus,
+.btn-check:focus + .btn, .btn-check:active + .btn,
+.nav-link:focus, .nav-link:active,
+.dropdown-item:focus, .dropdown-item:active,
+.list-group-item:focus, .list-group-item:active,
+.form-control:focus, .form-control:active,
+.form-select:focus, .form-select:active,
+input:focus, input:active,
+select:focus, select:active,
+textarea:focus, textarea:active {
+    outline: none !important;
+    box-shadow: none !important;
+    background-image: none !important;
+    filter: none !important;
+}
+
+.btn:active, .btn:active:focus, .btn:focus-visible {
+    transform: none !important;
+}
+
 .btn-success {
     background: var(--success-gradient);
     box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4);
@@ -174,6 +268,7 @@ body::before {
 /* Remove click light/focus glow */
 .btn:focus, .btn:active, .btn:focus:active {
     box-shadow: none !important;
+    transform: none !important;
 }
 
 .btn-outline-primary {
@@ -234,9 +329,9 @@ body::before {
 
 .form-control:focus, .form-select:focus {
     border-color: #667eea;
-    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    box-shadow: none !important;
     background: white;
-    transform: translateY(-1px);
+    transform: none !important;
 }
 
 .form-label {
@@ -787,4 +882,32 @@ body::before {
     background: var(--primary-gradient);
     color: white;
     transform: translateX(5px);
+}
+
+/* Disable global click highlight/glow */
+*:focus { outline: none !important; }
+* { -webkit-tap-highlight-color: transparent; }
+.nav-link:focus, .dropdown-item:focus { box-shadow: none !important; outline: none !important; }
+
+/* Force-remove ripple effects from common libraries (MDB, MUI, MDC, Waves) */
+.ripple, .waves-ripple, .ink, .mui-ripple, .md-ripple,
+.ripple-surface, [data-ripple], [data-mdb-ripple], [data-ripple-color] {
+    display: none !important;
+    opacity: 0 !important;
+    animation: none !important;
+    transition: none !important;
+}
+.mdc-ripple-surface::before,
+.mdc-ripple-surface::after,
+.btn::after, .btn::before,
+.nav-link::after, .nav-link::before {
+    content: none !important;
+}
+
+/* Hide dynamically injected absolute-position spans used as ripples */
+.btn span[style*="position: absolute"],
+.model-card span[style*="position: absolute"],
+.card-header span[style*="position: absolute"],
+.card-body span[style*="position: absolute"] {
+    display: none !important;
 }
