@@ -11,6 +11,7 @@ urlpatterns = [
     path('wizard/', views.prediction_wizard, name='wizard'),
     path('<int:pk>/', views.prediction_detail, name='detail'),
     path('<int:pk>/explore/', views.prediction_explore, name='explore'),
+    path('<int:pk>/explore-interactive/', views.prediction_explore_interactive, name='explore_interactive'),
     path('<int:pk>/run/', views.prediction_run, name='run'),
     path('<int:pk>/results/', views.prediction_results, name='results'),
     path('<int:pk>/delete/', views.prediction_delete, name='delete'),

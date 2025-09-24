@@ -9,6 +9,7 @@ urlpatterns = [
     path('<int:pk>/', views.dataset_detail, name='detail'),
     path('<int:pk>/preview/', views.dataset_preview, name='preview'),
     path('<int:pk>/explore/', views.dataset_explore, name='explore'),
+    path('<int:pk>/explore-interactive/', views.dataset_explore_interactive, name='explore_interactive'),
     path('<int:pk>/edit/', views.dataset_edit, name='edit'),
     path('<int:pk>/delete/', views.dataset_delete, name='delete'),
     path('<int:pk>/mapping/', views.column_mapping, name='mapping'),

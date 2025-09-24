@@ -1,0 +1,1062 @@
+{% extends 'base.html' %}
+
+{% block title %}Exploração Interativa - {{ dataset.name }} - Mirach{% endblock %}
+
+{% block extra_css %}
+<style>
+.metric-value {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+}
+
+.table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.loading {
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card {
+    transition: transform 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+/* FORÇAR VISIBILIDADE DAS ABAS - SELETORES ESPECÍFICOS */
+#data-tabs {
+    border-bottom: 3px solid #dee2e6 !important;
+    margin-bottom: 1rem !important;
+    background: #f8f9fa !important;
+    padding: 0.5rem !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+    display: flex !important;
+    list-style: none !important;
+}
+
+#data-tabs .nav-item {
+    margin-right: 0.5rem !important;
+}
+
+#data-tabs .nav-link {
+    border: 2px solid #dee2e6 !important;
+    border-bottom: none !important;
+    border-radius: 0.5rem 0.5rem 0 0 !important;
+    color: #495057 !important;
+    font-weight: 600 !important;
+    padding: 0.75rem 1.5rem !important;
+    background: #e9ecef !important;
+    text-decoration: none !important;
+    display: inline-block !important;
+    min-width: 120px !important;
+    text-align: center !important;
+    cursor: pointer !important;
+    transition: all 0.3s ease !important;
+}
+
+#data-tabs .nav-link:hover {
+    border-color: #adb5bd !important;
+    background: #dee2e6 !important;
+    color: #212529 !important;
+    transform: translateY(-2px) !important;
+}
+
+#data-tabs .nav-link.active {
+    color: #0d6efd !important;
+    background-color: #fff !important;
+    border-color: #0d6efd #0d6efd #fff !important;
+    border-bottom: 3px solid #0d6efd !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+/* FORÇAR VISIBILIDADE DO BOTÃO VOLTAR - SELETORES ESPECÍFICOS */
+a[href*="/datasets/"] {
+    background-color: #ffffff !important;
+    border: 3px solid #0d6efd !important;
+    color: #0d6efd !important;
+    font-weight: 700 !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: 0.5rem !important;
+    text-decoration: none !important;
+    display: inline-block !important;
+    min-width: 120px !important;
+    text-align: center !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+    transition: all 0.3s ease !important;
+}
+
+a[href*="/datasets/"]:hover {
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
+    color: #ffffff !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
+    text-decoration: none !important;
+}
+
+/* Garantir contraste no header */
+.card-header.bg-primary {
+    background-color: #0d6efd !important;
+    padding: 1.5rem !important;
+}
+
+.card-header.bg-primary a[href*="/datasets/"] {
+    background-color: #ffffff !important;
+    border: 3px solid #ffffff !important;
+    color: #0d6efd !important;
+    font-weight: 700 !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+}
+
+.card-header.bg-primary a[href*="/datasets/"]:hover {
+    background-color: #f8f9fa !important;
+    border-color: #f8f9fa !important;
+    color: #0d6efd !important;
+    transform: translateY(-2px) !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h4 class="mb-1">
+                                <i class="fas fa-database me-2"></i>Exploração Interativa de Dataset
+                            </h4>
+                            <p class="mb-0 opacity-75">
+                                <strong>Dataset:</strong> {{ dataset.name }} | 
+                                <strong>Projeto:</strong> {{ dataset.project.name }} |
+                                <strong>Status:</strong> 
+                                <span class="badge bg-light text-dark">{{ dataset.get_status_display }}</span>
+                            </p>
+                        </div>
+                        <div>
+                            <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-light" style="background-color: #ffffff !important; border: 3px solid #0d6efd !important; color: #0d6efd !important; font-weight: 700 !important; padding: 0.75rem 1.5rem !important; border-radius: 0.5rem !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;">
+                                <i class="fas fa-arrow-left"></i> Voltar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="metric-value text-primary" id="total-rows">-</div>
+                    <div class="metric-label text-muted">Total de Linhas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="metric-value text-success" id="total-columns">-</div>
+                    <div class="metric-label text-muted">Total de Colunas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="metric-value text-warning" id="memory-usage">-</div>
+                    <div class="metric-label text-muted">Memória (MB)</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center border-0 shadow-sm">
+                <div class="card-body">
+                    <div class="metric-value text-danger" id="missing-data">-</div>
+                    <div class="metric-label text-muted">Dados Faltantes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Controles e Filtros</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="rows-limit" class="form-label">Linhas para Exibir</label>
+                                <input type="range" id="rows-limit" class="form-range" min="10" max="1000" value="100">
+                                <div class="text-center mt-2">
+                                    <span id="rows-value" class="badge bg-primary">100</span> linhas
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="column-type" class="form-label">Tipo de Coluna</label>
+                                <select id="column-type" class="form-select">
+                                    <option value="all">Todas</option>
+                                    <option value="timestamp">Timestamp</option>
+                                    <option value="target">Target</option>
+                                    <option value="feature">Feature</option>
+                                    <option value="ignore">Ignore</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="show-mapped" class="form-label">Filtros</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="show-mapped" checked>
+                                    <label class="form-check-label" for="show-mapped">
+                                        Apenas Colunas Mapeadas
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="analysis-column" class="form-label">Análise de Coluna</label>
+                                <select id="analysis-column" class="form-select">
+                                    <option value="">Selecione uma coluna</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Charts -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Distribuição dos Tipos</h5>
+                </div>
+                <div class="card-body">
+                    <div id="types-chart" class="loading">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="mt-2 text-muted">Carregando gráfico...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Dados Faltantes</h5>
+                </div>
+                <div class="card-body">
+                    <div id="missing-chart" class="loading">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="mt-2 text-muted">Carregando gráfico...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Column Analysis -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Análise de Coluna</h5>
+                </div>
+                <div class="card-body">
+                    <div id="column-analysis-chart" class="loading">
+                        <div class="text-center">
+                            <i class="fas fa-info-circle fa-2x text-muted"></i>
+                            <p class="mt-2 text-muted">Selecione uma coluna para análise detalhada</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Correlation Matrix -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-project-diagram me-2"></i>Matriz de Correlação</h5>
+                </div>
+                <div class="card-body">
+                    <div id="correlation-chart" class="loading">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                            <p class="mt-2 text-muted">Carregando correlação...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Tables -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table me-2"></i>Dados Detalhados</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs" id="data-tabs" role="tablist" style="border-bottom: 3px solid #dee2e6 !important; margin-bottom: 1rem !important; background: #f8f9fa !important; padding: 0.5rem !important; border-radius: 0.5rem 0.5rem 0 0 !important; display: flex !important; list-style: none !important;">
+                        <li class="nav-item" role="presentation" style="margin-right: 0.5rem !important;">
+                            <button class="nav-link active" id="data-tab" data-bs-toggle="tab" data-bs-target="#data" type="button" role="tab" style="border: 2px solid #0d6efd !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #0d6efd !important; font-weight: 700 !important; padding: 0.75rem 1.5rem !important; background: #fff !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;">
+                                <i class="fas fa-database me-1"></i>Dados
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation" style="margin-right: 0.5rem !important;">
+                            <button class="nav-link" id="mapping-tab" data-bs-toggle="tab" data-bs-target="#mapping" type="button" role="tab" style="border: 2px solid #dee2e6 !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #495057 !important; font-weight: 600 !important; padding: 0.75rem 1.5rem !important; background: #e9ecef !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important;">
+                                <i class="fas fa-map me-1"></i>Mapeamento
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation" style="margin-right: 0.5rem !important;">
+                            <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button" role="tab" style="border: 2px solid #dee2e6 !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #495057 !important; font-weight: 600 !important; padding: 0.75rem 1.5rem !important; background: #e9ecef !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important;">
+                                <i class="fas fa-chart-line me-1"></i>Estatísticas
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content mt-3" id="data-tabs-content">
+                        <div class="tab-pane fade show active" id="data" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover" id="data-table">
+                                    <thead class="table-dark">
+                                        <!-- Headers will be loaded dynamically -->
+                                    </thead>
+                                    <tbody>
+                                        <!-- Data will be loaded dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="mapping" role="tabpanel">
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover" id="mapping-table">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Coluna</th>
+                                            <th>Tipo</th>
+                                            <th>Tipo de Dados</th>
+                                            <th>Valores Únicos</th>
+                                            <th>Valores Nulos</th>
+                                            <th>Exemplo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Mapping data will be loaded here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="stats" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card border-0 bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-info-circle me-2"></i>Informações Gerais</h6>
+                                            <ul class="list-unstyled mb-0" id="general-stats">
+                                                <!-- General stats will be loaded here -->
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card border-0 bg-light">
+                                        <div class="card-body">
+                                            <h6 class="card-title"><i class="fas fa-tags me-2"></i>Mapeamento</h6>
+                                            <ul class="list-unstyled mb-0" id="mapping-stats">
+                                                <!-- Mapping stats will be loaded here -->
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="numerical-stats" class="mt-3" style="display: none;">
+                                <div class="card border-0 bg-light">
+                                    <div class="card-body">
+                                        <h6 class="card-title"><i class="fas fa-calculator me-2"></i>Resumo Estatístico (Colunas Numéricas)</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover" id="stats-table">
+                                                <!-- Statistical summary will be loaded here -->
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-download me-2"></i>Exportação de Dados</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">Baixe os dados em diferentes formatos para análise externa:</p>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-file-csv me-2"></i>Dados Estruturados</h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-primary" onclick="downloadData('data', 'csv')">
+                                    <i class="fas fa-file-csv"></i> Dados CSV
+                                </button>
+                                <button class="btn btn-outline-primary" onclick="downloadData('mapping', 'csv')">
+                                    <i class="fas fa-map"></i> Mapeamento CSV
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-chart-line me-2"></i>Visualizações</h6>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-success" onclick="downloadData('chart', 'png')">
+                                    <i class="fas fa-image"></i> Gráfico PNG
+                                </button>
+                                <button class="btn btn-outline-info" onclick="downloadData('all', 'json')">
+                                    <i class="fas fa-database"></i> Dados Completos JSON
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden data for JavaScript -->
+<div id="dataset-data" style="display: none;">
+    {{ dataset_data|safe }}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+// Sistema de tabs completamente customizado - sem Bootstrap
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelectorAll('#data-tabs .nav-link');
+    const tabPanes = document.querySelectorAll('#data-tabs-content .tab-pane');
+    
+    // Função para atualizar estilos das abas
+    function updateTabStyles() {
+        tabs.forEach((tab) => {
+            const isActive = tab.classList.contains('active');
+            
+            if (isActive) {
+                // Estilo para aba ativa - usando setAttribute para forçar
+                tab.setAttribute('style', 'border: 2px solid #0d6efd !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #0d6efd !important; font-weight: 700 !important; padding: 0.75rem 1.5rem !important; background: #fff !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;');
+            } else {
+                // Estilo para abas inativas - usando setAttribute para forçar
+                tab.setAttribute('style', 'border: 2px solid #dee2e6 !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #495057 !important; font-weight: 600 !important; padding: 0.75rem 1.5rem !important; background: #e9ecef !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important;');
+            }
+        });
+    }
+    
+    // Função para mostrar tab específica
+    function showTab(targetTabId) {
+        // Remover active de todas as abas e panes
+        tabs.forEach(tab => {
+            tab.classList.remove('active');
+            tab.setAttribute('aria-selected', 'false');
+        });
+        
+        tabPanes.forEach(pane => {
+            pane.classList.remove('show', 'active');
+        });
+        
+        // Ativar aba e pane específicos
+        const targetTab = document.querySelector(`#data-tabs button[data-bs-target="${targetTabId}"]`);
+        const targetPane = document.querySelector(targetTabId);
+        
+        if (targetTab && targetPane) {
+            targetTab.classList.add('active');
+            targetTab.setAttribute('aria-selected', 'true');
+            targetPane.classList.add('show', 'active');
+        }
+        
+        // Atualizar estilos
+        updateTabStyles();
+    }
+    
+    // Adicionar event listeners customizados
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            const targetId = this.getAttribute('data-bs-target');
+            if (targetId) {
+                showTab(targetId);
+            }
+        });
+    });
+    
+    // Atualizar estilos iniciais
+    updateTabStyles();
+});
+</script>
+<script>
+// Simple D3-based dataset exploration
+class DatasetExplorer {
+    constructor() {
+        this.data = null;
+        this.dataframe = [];
+        this.mappings = {};
+        this.columnNames = [];
+        this.init();
+    }
+
+    async init() {
+        await this.loadData();
+        this.setupEventListeners();
+        this.render();
+    }
+
+    async loadData() {
+        try {
+            const dataElement = document.getElementById('dataset-data');
+            if (dataElement?.textContent) {
+                this.data = JSON.parse(dataElement.textContent);
+            } else {
+                this.showError('Erro ao carregar dados do dataset');
+                return;
+            }
+            this.processData();
+        } catch (error) {
+            console.error('Error loading dataset data:', error);
+            this.showError('Erro ao processar dados do dataset');
+        }
+    }
+
+    processData() {
+        if (!this.data) return;
+        
+        this.dataframe = this.data.dataframe || [];
+        this.mappings = this.data.mappings || {};
+        this.columnNames = this.data.column_names || [];
+    }
+
+    render() {
+        this.updateMetrics();
+        this.createTypesChart();
+        this.createMissingChart();
+        this.createCorrelationChart();
+        this.updateTables();
+        this.updateColumnSelector();
+    }
+
+    updateMetrics() {
+        const elements = {
+            'total-rows': this.data?.total_rows || '-',
+            'total-columns': this.data?.total_columns || '-',
+            'memory-usage': this.data?.memory_usage || '-',
+            'missing-data': this.data?.missing_data || '-'
+        };
+        
+        Object.entries(elements).forEach(([id, value]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        });
+    }
+
+    createTypesChart() {
+        const container = d3.select('#types-chart');
+        container.selectAll('*').remove();
+
+        const typeCounts = {};
+        this.columnNames.forEach(col => {
+            const colType = this.mappings[col] || 'unknown';
+            typeCounts[colType] = (typeCounts[colType] || 0) + 1;
+        });
+
+        if (Object.keys(typeCounts).length === 0) {
+            container.html('<p class="text-muted">Nenhum tipo de coluna disponível</p>');
+            return;
+        }
+
+        const margin = {top: 20, right: 20, bottom: 20, left: 20};
+        const width = 400 - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+        const radius = Math.min(width, height) / 2;
+
+        const svg = container.append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${width/2 + margin.left},${height/2 + margin.top})`);
+
+        const color = d3.scaleOrdinal()
+            .domain(Object.keys(typeCounts))
+            .range(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']);
+
+        const pie = d3.pie()
+            .value(d => d[1])
+            .sort(null);
+
+        const arc = d3.arc()
+            .innerRadius(0)
+            .outerRadius(radius);
+
+        const arcs = g.selectAll('.arc')
+            .data(pie(Object.entries(typeCounts)))
+            .enter().append('g')
+            .attr('class', 'arc');
+
+        arcs.append('path')
+            .attr('d', arc)
+            .attr('fill', d => color(d.data[0]));
+
+        arcs.append('text')
+            .attr('transform', d => `translate(${arc.centroid(d)})`)
+            .attr('text-anchor', 'middle')
+            .text(d => d.data[0])
+            .style('font-size', '12px')
+            .style('fill', 'white');
+    }
+
+    createMissingChart() {
+        const container = d3.select('#missing-chart');
+        container.selectAll('*').remove();
+
+        const missingData = this.data?.missing_data_by_column || {};
+        const columns = Object.keys(missingData);
+        const values = Object.values(missingData);
+
+        if (columns.length === 0) {
+            container.html('<p class="text-success">Nenhum dado faltante encontrado</p>');
+            return;
+        }
+
+        const margin = {top: 20, right: 30, bottom: 40, left: 50};
+        const width = 400 - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+
+        const svg = container.append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const xScale = d3.scaleBand()
+            .domain(columns)
+            .range([0, width])
+            .padding(0.1);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(values)])
+            .nice()
+            .range([height, 0]);
+
+        g.selectAll('.bar')
+            .data(Object.entries(missingData))
+            .enter().append('rect')
+            .attr('class', 'bar')
+            .attr('x', ([col]) => xScale(col))
+            .attr('width', xScale.bandwidth())
+            .attr('y', ([col, value]) => yScale(value))
+            .attr('height', ([col, value]) => height - yScale(value))
+            .attr('fill', 'red');
+
+        g.append('g')
+            .attr('transform', `translate(0,${height})`)
+            .call(d3.axisBottom(xScale));
+
+        g.append('g')
+            .call(d3.axisLeft(yScale));
+    }
+
+    createCorrelationChart() {
+        const container = d3.select('#correlation-chart');
+        container.selectAll('*').remove();
+
+        const correlationData = this.data?.correlation_matrix || {};
+        
+        if (Object.keys(correlationData).length === 0) {
+            container.html('<p class="text-muted">Correlação disponível apenas para colunas numéricas</p>');
+            return;
+        }
+
+        const columns = Object.keys(correlationData);
+        const matrix = columns.map(col => columns.map(col2 => correlationData[col][col2] || 0));
+
+        const margin = {top: 20, right: 20, bottom: 40, left: 40};
+        const width = 600 - margin.left - margin.right;
+        const height = 400 - margin.top - margin.bottom;
+
+        const svg = container.append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const xScale = d3.scaleBand()
+            .domain(columns)
+            .range([0, width])
+            .padding(0.05);
+
+        const yScale = d3.scaleBand()
+            .domain(columns)
+            .range([0, height])
+            .padding(0.05);
+
+        const colorScale = d3.scaleSequential(d3.interpolateRdBu)
+            .domain([-1, 1]);
+
+        g.selectAll('.cell')
+            .data(matrix.flatMap((row, i) => row.map((value, j) => ({row: i, col: j, value}))))
+            .enter().append('rect')
+            .attr('class', 'cell')
+            .attr('x', d => xScale(columns[d.col]))
+            .attr('y', d => yScale(columns[d.row]))
+            .attr('width', xScale.bandwidth())
+            .attr('height', yScale.bandwidth())
+            .attr('fill', d => colorScale(d.value));
+
+        g.append('g')
+            .attr('transform', `translate(0,${height})`)
+            .call(d3.axisBottom(xScale));
+
+        g.append('g')
+            .call(d3.axisLeft(yScale));
+    }
+
+    updateTables() {
+        this.updateDataTable();
+        this.updateMappingTable();
+        this.updateStatsTable();
+    }
+
+    updateDataTable() {
+        const tbody = document.querySelector('#data-table tbody');
+        const thead = document.querySelector('#data-table thead');
+        
+        if (!tbody || !thead) return;
+        
+        if (this.dataframe.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="100%" class="text-center">Nenhum dado disponível</td></tr>';
+            return;
+        }
+        
+        const headers = Object.keys(this.dataframe[0] || {});
+        thead.innerHTML = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+        
+        const rowsLimit = parseInt(document.getElementById('rows-limit')?.value || 100);
+        const filteredData = this.dataframe.slice(0, rowsLimit);
+        
+        tbody.innerHTML = filteredData.map(row => 
+            `<tr>${headers.map(h => `<td>${row[h] || ''}</td>`).join('')}</tr>`
+        ).join('');
+    }
+
+    updateMappingTable() {
+        const tbody = document.querySelector('#mapping-table tbody');
+        if (!tbody) return;
+        
+        tbody.innerHTML = this.columnNames.map(col => {
+            const colData = this.dataframe.length > 0 ? this.dataframe.map(row => row[col]) : [];
+            const uniqueValues = new Set(colData.filter(v => v !== null && v !== undefined)).size;
+            const nullValues = colData.filter(v => v === null || v === undefined).length;
+            const example = colData.find(v => v !== null && v !== undefined) || 'N/A';
+            
+            return `<tr>
+                <td>${col}</td>
+                <td>${this.mappings[col] || 'unknown'}</td>
+                <td>${typeof example}</td>
+                <td>${uniqueValues}</td>
+                <td>${nullValues}</td>
+                <td>${String(example).substring(0, 50)}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    updateStatsTable() {
+        const generalStats = document.getElementById('general-stats');
+        const mappingStats = document.getElementById('mapping-stats');
+        
+        if (generalStats) {
+            generalStats.innerHTML = `
+                <li><strong>Total de linhas:</strong> ${this.data?.total_rows || 0}</li>
+                <li><strong>Total de colunas:</strong> ${this.data?.total_columns || 0}</li>
+                <li><strong>Memória utilizada:</strong> ${this.data?.memory_usage || 0} MB</li>
+                <li><strong>Colunas com dados faltantes:</strong> ${this.data?.columns_with_missing || 0}</li>
+                <li><strong>Colunas numéricas:</strong> ${this.data?.numerical_columns || 0}</li>
+                <li><strong>Colunas categóricas:</strong> ${this.data?.categorical_columns || 0}</li>
+            `;
+        }
+        
+        if (mappingStats) {
+            const typeCounts = {};
+            this.columnNames.forEach(col => {
+                const colType = this.mappings[col] || 'unknown';
+                typeCounts[colType] = (typeCounts[colType] || 0) + 1;
+            });
+            
+            mappingStats.innerHTML = Object.entries(typeCounts)
+                .map(([type, count]) => `<li><strong>${type}:</strong> ${count} colunas</li>`)
+                .join('');
+        }
+    }
+
+    updateColumnSelector() {
+        const selector = document.getElementById('analysis-column');
+        if (!selector) return;
+        
+        selector.innerHTML = '<option value="">Selecione uma coluna</option>';
+        
+        this.columnNames.forEach(col => {
+            const option = document.createElement('option');
+            option.value = col;
+            option.textContent = `${col} (${this.mappings[col] || 'unknown'})`;
+            selector.appendChild(option);
+        });
+    }
+
+    createColumnAnalysis(columnName) {
+        const container = d3.select('#column-analysis-chart');
+        container.selectAll('*').remove();
+
+        const colData = this.dataframe.map(row => row[columnName]).filter(v => v !== null && v !== undefined);
+        
+        if (colData.length === 0) {
+            container.html('<p class="text-danger">Nenhum dado válido encontrado para esta coluna</p>');
+            return;
+        }
+        
+        const isNumeric = colData.every(v => !isNaN(parseFloat(v)));
+        
+        if (isNumeric) {
+            this.createNumericAnalysis(container, colData, columnName);
+        } else {
+            this.createCategoricalAnalysis(container, colData, columnName);
+        }
+    }
+
+    createNumericAnalysis(container, data, columnName) {
+        const margin = {top: 20, right: 30, bottom: 40, left: 50};
+        const width = 500 - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+
+        const svg = container.append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const xScale = d3.scaleLinear()
+            .domain(d3.extent(data))
+            .range([0, width]);
+
+        const histogram = d3.histogram()
+            .domain(xScale.domain())
+            .thresholds(20);
+
+        const bins = histogram(data);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(bins, d => d.length)])
+            .range([height, 0]);
+
+        g.selectAll('.bar')
+            .data(bins)
+            .enter().append('rect')
+            .attr('class', 'bar')
+            .attr('x', d => xScale(d.x0))
+            .attr('width', d => xScale(d.x1) - xScale(d.x0))
+            .attr('y', d => yScale(d.length))
+            .attr('height', d => height - yScale(d.length))
+            .attr('fill', '#1f77b4');
+
+        g.append('g')
+            .attr('transform', `translate(0,${height})`)
+            .call(d3.axisBottom(xScale));
+
+        g.append('g')
+            .call(d3.axisLeft(yScale));
+    }
+
+    createCategoricalAnalysis(container, data, columnName) {
+        const valueCounts = {};
+        data.forEach(v => {
+            valueCounts[v] = (valueCounts[v] || 0) + 1;
+        });
+        
+        const sortedValues = Object.entries(valueCounts)
+            .sort(([,a], [,b]) => b - a)
+            .slice(0, 10);
+
+        const margin = {top: 20, right: 30, bottom: 40, left: 50};
+        const width = 500 - margin.left - margin.right;
+        const height = 300 - margin.top - margin.bottom;
+
+        const svg = container.append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const xScale = d3.scaleBand()
+            .domain(sortedValues.map(([value]) => value))
+            .range([0, width])
+            .padding(0.1);
+
+        const yScale = d3.scaleLinear()
+            .domain([0, d3.max(sortedValues, ([value, count]) => count)])
+            .nice()
+            .range([height, 0]);
+
+        g.selectAll('.bar')
+            .data(sortedValues)
+            .enter().append('rect')
+            .attr('class', 'bar')
+            .attr('x', ([value]) => xScale(value))
+            .attr('width', xScale.bandwidth())
+            .attr('y', ([value, count]) => yScale(count))
+            .attr('height', ([value, count]) => height - yScale(count))
+            .attr('fill', '#2ca02c');
+
+        g.append('g')
+            .attr('transform', `translate(0,${height})`)
+            .call(d3.axisBottom(xScale));
+
+        g.append('g')
+            .call(d3.axisLeft(yScale));
+    }
+
+    setupEventListeners() {
+        const rowsLimit = document.getElementById('rows-limit');
+        const analysisColumn = document.getElementById('analysis-column');
+
+        if (rowsLimit) {
+            rowsLimit.addEventListener('input', (e) => {
+                document.getElementById('rows-value').textContent = e.target.value;
+                this.updateDataTable();
+            });
+        }
+        
+        if (analysisColumn) {
+            analysisColumn.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    this.createColumnAnalysis(e.target.value);
+                } else {
+                    document.getElementById('column-analysis-chart').innerHTML = '<p class="text-muted">Selecione uma coluna para análise detalhada</p>';
+                }
+            });
+        }
+    }
+
+    downloadData(type, format) {
+        let data, filename;
+        
+        switch (type) {
+            case 'data':
+                const rowsLimit = parseInt(document.getElementById('rows-limit')?.value || 100);
+                data = this.dataframe.slice(0, rowsLimit);
+                filename = `dados_dataset_${format}`;
+                break;
+            case 'mapping':
+                data = this.columnNames.map(col => ({
+                    coluna: col,
+                    tipo: this.mappings[col] || 'unknown',
+                    valores_unicos: new Set(this.dataframe.map(row => row[col])).size,
+                    valores_nulos: this.dataframe.map(row => row[col]).filter(v => v === null || v === undefined).length
+                }));
+                filename = `mapeamento_dataset_${format}`;
+                break;
+            case 'all':
+                data = {
+                    dataframe: this.dataframe,
+                    mappings: this.mappings,
+                    columnNames: this.columnNames,
+                    stats: this.data
+                };
+                filename = `dados_completos_dataset_${format}`;
+                break;
+        }
+        
+        if (format === 'csv' && Array.isArray(data)) {
+            const csv = this.convertToCSV(data);
+            this.downloadFile(csv, filename, 'text/csv');
+        } else {
+            this.downloadFile(JSON.stringify(data, null, 2), filename, 'application/json');
+        }
+    }
+
+    convertToCSV(data) {
+        if (data.length === 0) return '';
+        const headers = Object.keys(data[0]);
+        return [
+            headers.join(','),
+            ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+        ].join('\n');
+    }
+
+    downloadFile(content, filename, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    showError(message) {
+        ['types-chart', 'missing-chart', 'correlation-chart', 'column-analysis-chart'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) element.innerHTML = `<p class="text-danger">${message}</p>`;
+        });
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    new DatasetExplorer();
+});
+</script>
+{% endblock %}

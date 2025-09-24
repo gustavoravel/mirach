@@ -8,6 +8,28 @@ from django.urls import reverse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from accounts.models import Subscription
+import json
+import pandas as pd
+import numpy as np
+from datetime import datetime, date
+
+
+def sanitize_for_json(obj):
+    """Convert non-JSON serializable objects to serializable ones"""
+    if isinstance(obj, dict):
+        return {key: sanitize_for_json(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [sanitize_for_json(item) for item in obj]
+    elif isinstance(obj, (pd.Timestamp, datetime, date)):
+        return obj.isoformat() if hasattr(obj, 'isoformat') else str(obj)
+    elif isinstance(obj, (np.integer, np.floating)):
+        return obj.item()
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif pd.isna(obj):
+        return None
+    else:
+        return obj
 
 
 @login_required
@@ -277,3 +299,86 @@ def api_list_datasets(request):
         {'id': d.id, 'name': d.name, 'project_id': d.project_id, 'rows': d.total_rows, 'cols': d.total_columns}
         for d in qs
     ]})
+
+
+@login_required
+def dataset_explore_interactive(request, pk):
+    """Interactive exploration page integrated in Django"""
+    dataset = get_object_or_404(Dataset, pk=pk)
+    
+    # Check permissions
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+        messages.error(request, 'Você não tem permissão para acessar este dataset.')
+        return redirect('datasets:list')
+    
+    # Prepare data for the interactive page
+    dataset_data = {
+        'dataframe': [],
+        'mappings': {},
+        'column_names': dataset.column_names or [],
+        'total_rows': dataset.total_rows or 0,
+        'total_columns': dataset.total_columns or 0,
+        'memory_usage': 0,
+        'missing_data': 0,
+        'missing_data_by_column': {},
+        'correlation_matrix': {},
+        'numerical_stats': {},
+        'columns_with_missing': 0,
+        'numerical_columns': 0,
+        'categorical_columns': 0
+    }
+    
+    # Load dataset file
+    try:
+        if dataset.file:
+            # Read dataset file using file.open() for remote storage compatibility
+            with dataset.file.open('rb') as file:
+                if dataset.file.name.endswith('.xlsx'):
+                    df = pd.read_excel(file)
+                else:
+                    df = pd.read_csv(file)
+            
+            # Get column mappings
+            mappings = {}
+            for mapping in dataset.column_mappings.all():
+                mappings[mapping.column_name] = mapping.column_type
+            
+            dataset_data['mappings'] = mappings
+            
+            # Convert dataframe to list of dictionaries for JSON serialization
+            dataframe_dict = df.head(1000).to_dict('records')  # Limit to 1000 rows for performance
+            dataset_data['dataframe'] = sanitize_for_json(dataframe_dict)
+            
+            # Calculate statistics
+            dataset_data['memory_usage'] = round(df.memory_usage(deep=True).sum() / 1024**2, 2)
+            
+            # Missing data analysis
+            missing_data = df.isnull().sum()
+            dataset_data['missing_data'] = int(missing_data.sum())
+            dataset_data['missing_data_by_column'] = {col: int(count) for col, count in missing_data.items() if count > 0}
+            dataset_data['columns_with_missing'] = int((missing_data > 0).sum())
+            
+            # Column type analysis
+            numerical_cols = df.select_dtypes(include=[np.number]).columns
+            categorical_cols = df.select_dtypes(include=['object']).columns
+            dataset_data['numerical_columns'] = len(numerical_cols)
+            dataset_data['categorical_columns'] = len(categorical_cols)
+            
+            # Correlation matrix for numerical columns
+            if len(numerical_cols) > 1:
+                corr_matrix = df[numerical_cols].corr()
+                dataset_data['correlation_matrix'] = sanitize_for_json(corr_matrix.to_dict())
+            
+            # Numerical statistics
+            if len(numerical_cols) > 0:
+                stats_df = df[numerical_cols].describe()
+                dataset_data['numerical_stats'] = sanitize_for_json(stats_df.to_dict())
+                
+    except Exception as e:
+        print(f"Error loading dataset: {e}")
+        messages.error(request, f'Erro ao carregar dados do dataset: {str(e)}')
+    
+    return render(request, 'datasets/explore_interactive.html', {
+        'dataset': dataset,
+        'dataset_data': json.dumps(sanitize_for_json(dataset_data))
+    })

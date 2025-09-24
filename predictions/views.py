@@ -9,6 +9,9 @@ from rest_framework.throttling import UserRateThrottle
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 import json
+import subprocess
+import threading
+import time
 from .models import Prediction, PredictionModel
 from .services import PredictionService
 from .tasks import run_prediction_task
@@ -188,11 +191,13 @@ def prediction_run(request, pk):
 
 @login_required
 def prediction_results(request, pk):
+    """Redirect to interactive exploration page"""
     prediction = get_object_or_404(Prediction, pk=pk)
     if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
         messages.error(request, 'Acesso negado a esta previsão.')
         return redirect('predictions:list')
-    return render(request, 'predictions/results.html', {'prediction': prediction})
+    # Redirect to the unified exploration page
+    return redirect('predictions:explore_interactive', pk=pk)
 
 
 @login_required
@@ -616,3 +621,83 @@ def api_prediction_results(request, pk):
         for r in p.results.all()
     ]
     return JsonResponse({'prediction_id': p.id, 'results': data})
+
+
+@login_required
+def prediction_explore_interactive(request, pk):
+    """Interactive exploration page integrated in Django"""
+    prediction = get_object_or_404(Prediction, pk=pk)
+    
+    # Check permissions
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        messages.error(request, 'Você não tem permissão para acessar esta previsão.')
+        return redirect('predictions:list')
+    
+    # Check if prediction is completed
+    if prediction.status != 'completed':
+        messages.warning(request, 'A previsão ainda não foi concluída.')
+        return redirect('predictions:detail', pk=pk)
+    
+    # Prepare data for the interactive page
+    prediction_data = {
+        'historical_data': [],
+        'results': [],
+        'metrics': prediction.metrics or {},
+        'model_algorithm': prediction.prediction_model.algorithm_type,
+        'model_parameters': prediction.model_parameters or {}
+    }
+    
+    # Load historical data from dataset
+    try:
+        dataset = prediction.dataset
+        if dataset.file:
+            # Get target column
+            target_mapping = dataset.column_mappings.filter(column_type='target').first()
+            target_col = target_mapping.column_name if target_mapping else None
+            
+            # Get timestamp column
+            timestamp_mapping = dataset.column_mappings.filter(column_type='timestamp').first()
+            timestamp_col = timestamp_mapping.column_name if timestamp_mapping else None
+            
+            if target_col and timestamp_col:
+                # Read dataset file
+                if dataset.file.path.endswith('.xlsx'):
+                    df = pd.read_excel(dataset.file.path)
+                else:
+                    df = pd.read_csv(dataset.file.path)
+                
+                # Prepare historical data
+                df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+                df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
+                historical_df = df[[timestamp_col, target_col]].dropna()
+                historical_df = historical_df.sort_values(timestamp_col)
+                
+                prediction_data['historical_data'] = [
+                    {
+                        'timestamp': row[timestamp_col].isoformat(),
+                        'value': float(row[target_col])
+                    }
+                    for _, row in historical_df.iterrows()
+                ]
+    except Exception as e:
+        print(f"Error loading historical data: {e}")
+    
+    # Load prediction results
+    try:
+        results = prediction.results.all().order_by('timestamp')
+        prediction_data['results'] = [
+            {
+                'timestamp': result.timestamp.isoformat(),
+                'predicted_value': float(result.predicted_value),
+                'ci_lower': float(result.confidence_interval_lower) if result.confidence_interval_lower else None,
+                'ci_upper': float(result.confidence_interval_upper) if result.confidence_interval_upper else None
+            }
+            for result in results
+        ]
+    except Exception as e:
+        print(f"Error loading prediction results: {e}")
+    
+    return render(request, 'predictions/explore_interactive.html', {
+        'prediction': prediction,
+        'prediction_data': json.dumps(prediction_data)
+    })
