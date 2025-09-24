@@ -53,6 +53,22 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="frequency" class="form-label">Periodicidade dos dados</label>
+                                <select class="form-select" id="frequency" name="frequency" required>
+                                    <option value="D" selected>Diário</option>
+                                    <option value="W">Semanal</option>
+                                    <option value="M">Mensal</option>
+                                    <option value="Q">Trimestral</option>
+                                    <option value="Y">Anual</option>
+                                </select>
+                                <div class="form-text">Usado para sazonalidade e geração de datas futuras.</div>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div class="row">
                         <div class="col-md-4">
@@ -88,7 +104,7 @@
                         <div class="row" id="model-selection">
                             {% for model in models %}
                             <div class="col-md-6 col-lg-4 mb-3">
-                                <div class="card model-card" data-model-id="{{ model.pk }}">
+                                <div class="card model-card" data-model-id="{{ model.pk }}" tabindex="0" role="button" aria-label="Selecionar {{ model.name }}">
                                     <div class="card-body text-center">
                                         <div class="model-icon mb-2">
                                             <i class="fas fa-{{ model.algorithm_type|default:'chart-line' }}"></i>
@@ -168,6 +184,27 @@ document.querySelectorAll('input[name="model"]').forEach(radio => {
             
             // Show parameters
             showModelParameters(this.value);
+        }
+    });
+});
+
+// Make entire model card selectable
+document.querySelectorAll('.model-card').forEach(card => {
+    card.addEventListener('click', function(e) {
+        const radio = this.querySelector('input[type="radio"][name="model"]');
+        if (radio) {
+            radio.checked = true;
+            radio.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    });
+    card.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const radio = this.querySelector('input[type="radio"][name="model"]');
+            if (radio) {
+                radio.checked = true;
+                radio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
         }
     });
 });

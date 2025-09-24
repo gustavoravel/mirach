@@ -2,6 +2,7 @@
 
 {% block title %}Projeto - Mirach{% endblock %}
 
+{% load project_extras %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
   <div>
@@ -61,20 +62,41 @@
   </div>
   <div class="col-lg-6">
     <div class="card mb-4">
-      <div class="card-header"><strong>Auditoria (últimos 50)</strong></div>
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <strong>Auditoria (últimos 50)</strong>
+        <span class="text-muted small">Atividade recente</span>
+      </div>
       <div class="card-body">
-        <ul class="list-group">
+        <div class="list-group list-group-flush">
         {% for log in logs %}
-          <li class="list-group-item d-flex justify-content-between align-items-center">
-            <span>
-              <strong>{{ log.action }}</strong> — {{ log.context }}
-            </span>
-            <small class="text-muted">{{ log.created_at|date:"d/m/Y H:i" }}</small>
-          </li>
+          <div class="list-group-item">
+            <div class="d-flex w-100 justify-content-between">
+              <div>
+                {% with a=log.action %}
+                  {% if a == 'project_create' %}<i class="fas fa-plus-circle text-success me-2"></i>
+                  {% elif a == 'project_update' %}<i class="fas fa-pen text-primary me-2"></i>
+                  {% elif a == 'project_delete' %}<i class="fas fa-trash text-danger me-2"></i>
+                  {% elif a == 'dataset_upload' %}<i class="fas fa-file-upload text-primary me-2"></i>
+                  {% elif a == 'prediction_create' %}<i class="fas fa-magic text-primary me-2"></i>
+                  {% elif a == 'prediction_run' %}<i class="fas fa-play text-success me-2"></i>
+                  {% else %}<i class="fas fa-circle text-muted me-2"></i>
+                  {% endif %}
+                {% endwith %}
+                <span class="badge bg-light text-dark me-2">{{ log.action|action_label }}</span>
+                {% if log.user %}
+                  <span class="text-muted">por {{ log.user.email|default:log.user.username }}</span>
+                {% endif %}
+                {% if log.context %}
+                  <pre class="d-inline small ms-2 text-muted" style="white-space: pre-wrap; margin: 0;">{{ log.context|json_script:"ctx" }}{% autoescape off %}{{ ctx }}{% endautoescape %}</pre>
+                {% endif %}
+              </div>
+              <small class="text-muted"><i class="far fa-clock me-1"></i>{{ log.created_at|timesince }} atrás</small>
+            </div>
+          </div>
         {% empty %}
-          <li class="list-group-item">Sem eventos ainda.</li>
+          <div class="list-group-item">Sem eventos ainda.</div>
         {% endfor %}
-        </ul>
+        </div>
       </div>
     </div>
   </div>
