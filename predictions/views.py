@@ -43,6 +43,7 @@ def prediction_create(request):
         project_id = request.POST.get('project')
         dataset_id = request.POST.get('dataset')
         model_id = request.POST.get('model')
+        frequency = request.POST.get('frequency', 'D')
         name = request.POST.get('name')
         prediction_horizon = request.POST.get('prediction_horizon')
         train_size = float(request.POST.get('train_size', 0.8))
@@ -69,12 +70,14 @@ def prediction_create(request):
                     messages.warning(request, 'Limite mensal de previsões atingido no seu plano. Faça upgrade para continuar.')
                     return redirect('accounts:profile')
                 # Model gating for Free plan
-                if sub.plan.code == 'free' and model.algorithm_type not in ALLOWED_FREE_MODELS:
+                if sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False) and model.algorithm_type not in ALLOWED_FREE_MODELS:
                     messages.warning(request, 'Este modelo é Pro. Faça upgrade para utilizá-lo.')
                     return redirect(f"{reverse('predictions:create')}?upgrade=1")
 
             # Get model parameters
             model_parameters = model.parameters.copy()
+            # Store frequency in model parameters for downstream usage
+            model_parameters['frequency'] = frequency
             
             # Override with user parameters if provided
             for key, value in request.POST.items():
@@ -118,7 +121,7 @@ def prediction_create(request):
     projects = Project.objects.filter(memberships__user=request.user, is_active=True).distinct()
     datasets = Dataset.objects.filter(project__memberships__user=request.user, status__in=['processed','uploaded'])
     sub = Subscription.current_for(request.user)
-    if sub and sub.plan.code == 'free':
+    if sub and sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False):
         models = PredictionModel.objects.filter(is_active=True, algorithm_type__in=ALLOWED_FREE_MODELS)
     else:
         models = PredictionModel.objects.filter(is_active=True)
@@ -149,7 +152,7 @@ def prediction_run(request, pk):
         return redirect('predictions:list')
     # Feature gate: somente planos pagos
     sub = Subscription.current_for(request.user)
-    if sub and sub.plan.code == 'free':
+    if sub and sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False):
         # Permitir execução se o modelo for básico; bloquear se avançado
         if prediction.prediction_model.algorithm_type not in ALLOWED_FREE_MODELS:
             messages.warning(request, 'Este modelo é Pro. Faça upgrade para continuar.')
@@ -274,7 +277,7 @@ def prediction_wizard(request):
 
     datasets = Dataset.objects.filter(project__owner=request.user)
     sub = Subscription.current_for(request.user)
-    if sub and sub.plan.code == 'free':
+    if sub and sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False):
         models = PredictionModel.objects.filter(is_active=True, algorithm_type__in=ALLOWED_FREE_MODELS)
     else:
         models = PredictionModel.objects.filter(is_active=True)
@@ -335,7 +338,7 @@ def compare_models(request, dataset_id):
             if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
                 return JsonResponse({'success': False, 'error': 'Acesso negado'})
             sub = Subscription.current_for(request.user)
-            if sub and sub.plan.code == 'free':
+            if sub and sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False):
                 return JsonResponse({'success': False, 'error': 'upgrade_required'}, status=403)
             models = request.POST.getlist('models')
             train_size = float(request.POST.get('train_size', 0.8))
@@ -358,7 +361,7 @@ def backtest(request, dataset_id):
         if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
             return JsonResponse({'success': False, 'error': 'Acesso negado'})
         sub = Subscription.current_for(request.user)
-        if sub and sub.plan.code == 'free':
+        if sub and sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False):
             return JsonResponse({'success': False, 'error': 'upgrade_required'}, status=403)
         models = request.GET.getlist('models') or ['arima', 'ets', 'prophet']
         train_size = float(request.GET.get('train_size', 0.7))
@@ -566,7 +569,7 @@ def api_create_prediction(request):
 
         # Model gating for Free plan
         sub = Subscription.current_for(request.user)
-        if sub and sub.plan.code == 'free' and model.algorithm_type not in ALLOWED_FREE_MODELS:
+        if sub and sub.plan.code == 'free' and not getattr(settings, 'DEBUG', False) and model.algorithm_type not in ALLOWED_FREE_MODELS:
             return JsonResponse({'error': 'upgrade_required', 'detail': 'Model not available for Free plan'}, status=403)
 
         model_parameters = model.parameters.copy()

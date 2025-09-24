@@ -870,18 +870,33 @@ textarea:focus, textarea:active {
     box-shadow: var(--shadow-medium);
     backdrop-filter: blur(10px);
     background: rgba(255, 255, 255, 0.95);
+    color: #212529 !important;
 }
 
 .dropdown-item {
     border-radius: 8px;
     margin: 4px 8px;
     transition: var(--transition);
+    color: #212529 !important;
 }
 
 .dropdown-item:hover {
     background: var(--primary-gradient);
     color: white;
     transform: translateX(5px);
+}
+
+/* Ensure readable labels inside dropdown header/user block */
+.dropdown-menu .dropdown-header,
+.dropdown-menu .text-muted,
+.dropdown-menu .text-secondary,
+.dropdown-menu .small {
+    color: #4a5560 !important;
+}
+
+.dropdown-menu a,
+.dropdown-menu .dropdown-item a {
+    color: #212529 !important;
 }
 
 /* Disable global click highlight/glow */

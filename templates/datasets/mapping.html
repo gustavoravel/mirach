@@ -27,10 +27,19 @@
               <td><code>{{ col }}</code></td>
               <td style="max-width:260px;">
                 <select name="column_type_{{ col }}" class="form-select form-select-sm">
-                  <option value="ignore">Ignorar</option>
-                  <option value="timestamp">Timestamp/Data</option>
-                  <option value="target">Variável Alvo</option>
-                  <option value="feature">Variável Explicativa</option>
+                  {% for mapping in dataset.column_mappings.all %}
+                    {% if mapping.column_name == col %}
+                      <option value="ignore" {% if mapping.column_type == 'ignore' %}selected{% endif %}>Ignorar</option>
+                      <option value="timestamp" {% if mapping.column_type == 'timestamp' %}selected{% endif %}>Timestamp/Data</option>
+                      <option value="target" {% if mapping.column_type == 'target' %}selected{% endif %}>Variável Alvo</option>
+                      <option value="feature" {% if mapping.column_type == 'feature' %}selected{% endif %}>Variável Explicativa</option>
+                    {% endif %}
+                  {% empty %}
+                    <option value="ignore">Ignorar</option>
+                    <option value="timestamp">Timestamp/Data</option>
+                    <option value="target">Variável Alvo</option>
+                    <option value="feature">Variável Explicativa</option>
+                  {% endfor %}
                 </select>
               </td>
             </tr>

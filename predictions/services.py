@@ -79,6 +79,9 @@ class PredictionService:
             df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
             target_series = df[target_col].dropna()
             
+            if len(target_series) == 0:
+                raise ValueError(f"Target column '{target_col}' has no valid numeric data after conversion")
+            
             return target_series, feature_cols
             
         except Exception as e:
@@ -119,6 +122,12 @@ class PredictionService:
                 prediction.prediction_model.algorithm_type,
                 **prediction.model_parameters
             )
+
+            # Validate minimum samples for ML models (lags/rolling drop initial rows)
+            ml_models = {'linear_regression','ridge','lasso','random_forest','svr','neural_network','xgboost','lightgbm'}
+            if prediction.prediction_model.algorithm_type in ml_models:
+                if len(train_data) < 15:
+                    raise ValueError("Insufficient training samples for ML model. Provide at least ~15-20 points.")
             
             # Fit model
             fit_results = forecaster.fit(train_data)
@@ -148,7 +157,7 @@ class PredictionService:
             metrics = self._sanitize_json(metrics)
 
             # Create prediction results
-            self._create_prediction_results(prediction, predictions, target_series)
+            self._create_prediction_results(prediction, predictions, target_series, prediction.model_parameters.get('frequency'))
             
             # Update prediction
             prediction.status = 'completed'
@@ -158,7 +167,8 @@ class PredictionService:
                 'forecast': predictions.tolist(),
                 'forecast_dates': self._generate_forecast_dates(
                     target_series.index[-1], 
-                    prediction.prediction_horizon
+                    prediction.prediction_horizon,
+                    prediction.model_parameters.get('frequency')
                 ),
                 'fit_results': fit_results
             })
@@ -241,7 +251,8 @@ class PredictionService:
             return obj
     
     def _create_prediction_results(self, prediction: Prediction, 
-                                 forecasts: pd.Series, original_data: pd.Series):
+                                 forecasts: pd.Series, original_data: pd.Series,
+                                 frequency: Optional[str] = None):
         """Create PredictionResult objects"""
         # Clear existing results
         prediction.results.all().delete()
@@ -249,7 +260,17 @@ class PredictionService:
         # Generate forecast dates
         last_date = original_data.index[-1]
         if isinstance(last_date, pd.Timestamp):
-            forecast_dates = [last_date + timedelta(days=i+1) for i in range(len(forecasts))]
+            try:
+                if frequency:
+                    freq_map = {
+                        'D': 'D', 'W': 'W', 'M': 'M', 'Q': 'Q', 'Y': 'Y'
+                    }
+                    freq = freq_map.get(frequency, 'D')
+                    forecast_dates = pd.date_range(start=last_date, periods=len(forecasts)+1, freq=freq)[1:]
+                else:
+                    forecast_dates = [last_date + timedelta(days=i+1) for i in range(len(forecasts))]
+            except Exception:
+                forecast_dates = [last_date + timedelta(days=i+1) for i in range(len(forecasts))]
         else:
             forecast_dates = [last_date + i + 1 for i in range(len(forecasts))]
         
@@ -261,10 +282,18 @@ class PredictionService:
                 predicted_value=float(forecast_value)
             )
     
-    def _generate_forecast_dates(self, last_date: pd.Timestamp, horizon: int) -> List[str]:
+    def _generate_forecast_dates(self, last_date: pd.Timestamp, horizon: int, frequency: Optional[str] = None) -> List[str]:
         """Generate forecast dates"""
         if isinstance(last_date, pd.Timestamp):
-            dates = [last_date + timedelta(days=i+1) for i in range(horizon)]
+            try:
+                if frequency:
+                    freq_map = {'D': 'D', 'W': 'W', 'M': 'M', 'Q': 'Q', 'Y': 'Y'}
+                    freq = freq_map.get(frequency, 'D')
+                    dates = pd.date_range(start=last_date, periods=horizon+1, freq=freq)[1:]
+                else:
+                    dates = [last_date + timedelta(days=i+1) for i in range(horizon)]
+            except Exception:
+                dates = [last_date + timedelta(days=i+1) for i in range(horizon)]
         else:
             dates = [last_date + i + 1 for i in range(horizon)]
         
