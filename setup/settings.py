@@ -41,6 +41,8 @@ env = environ.Env(
     # Supabase
     SUPABASE_PROJECT_URL=(str, ''),
     SUPABASE_ANON_KEY=(str, ''),
+    SUPABASE_ACCESS_KEY_ID=(str, ''),
+    SUPABASE_SECRET_ACCESS_KEY=(str, ''),
     # Email
     EMAIL_BACKEND=(str, 'django.core.mail.backends.console.EmailBackend'),
     EMAIL_HOST=(str, ''),
@@ -209,6 +211,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 ENVIRONMENT = env('ENVIRONMENT').lower()
 SUPABASE_PROJECT_URL = env('SUPABASE_PROJECT_URL')
 SUPABASE_ANON_KEY = env('SUPABASE_ANON_KEY')
+SUPABASE_ACCESS_KEY_ID = env('SUPABASE_ACCESS_KEY_ID')
+SUPABASE_SECRET_ACCESS_KEY = env('SUPABASE_SECRET_ACCESS_KEY')
 
 # Check if Supabase is configured
 USE_SUPABASE = bool(SUPABASE_PROJECT_URL and SUPABASE_ANON_KEY)

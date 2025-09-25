@@ -160,3 +160,8 @@ cython_debug/
 #.idea/
 
 db.sqlite3
+cleanup_test_env.py
+setup_test_env.py
+test_supabase.py
+.cursor/mcp.json
+setup/__pycache__/
