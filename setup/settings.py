@@ -30,12 +30,17 @@ env = environ.Env(
     CORS_ALLOW_ALL_ORIGINS=(bool, True),
     STATIC_URL=(str, 'static/'),
     MEDIA_URL=(str, '/media/'),
-    USE_S3=(bool, False),
+    # Environment
+    ENVIRONMENT=(str, 'development'),
+    # Storage
     AWS_STORAGE_BUCKET_NAME=(str, ''),
     AWS_S3_REGION_NAME=(str, ''),
     AWS_S3_ENDPOINT_URL=(str, ''),
     AWS_ACCESS_KEY_ID=(str, ''),
     AWS_SECRET_ACCESS_KEY=(str, ''),
+    # Supabase
+    SUPABASE_PROJECT_URL=(str, ''),
+    SUPABASE_ANON_KEY=(str, ''),
     # Email
     EMAIL_BACKEND=(str, 'django.core.mail.backends.console.EmailBackend'),
     EMAIL_HOST=(str, ''),
@@ -199,10 +204,40 @@ MEDIA_URL = env('MEDIA_URL')
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # ----------------------------------------------------------------------------
-# Storage (S3/MinIO via django-storages)
+# Storage (MinIO/S3/Supabase via django-storages)
 # ----------------------------------------------------------------------------
-USE_S3 = env('USE_S3')
-if USE_S3:
+ENVIRONMENT = env('ENVIRONMENT').lower()
+SUPABASE_PROJECT_URL = env('SUPABASE_PROJECT_URL')
+SUPABASE_ANON_KEY = env('SUPABASE_ANON_KEY')
+
+# Check if Supabase is configured
+USE_SUPABASE = bool(SUPABASE_PROJECT_URL and SUPABASE_ANON_KEY)
+
+if ENVIRONMENT == 'development':
+    # Use MinIO for development
+    INSTALLED_APPS = [*INSTALLED_APPS, 'storages']
+    AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME') or 'us-east-1'
+    AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL') or 'http://localhost:9000'
+    AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID') or 'minioadmin'
+    AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY') or 'minioadmin'
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_FILE_OVERWRITE = False
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+elif ENVIRONMENT == 'production' and USE_SUPABASE:
+    # Use Supabase Storage for production
+    INSTALLED_APPS = [*INSTALLED_APPS, 'storages']
+    AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
+    AWS_S3_REGION_NAME = 'us-east-1'  # Supabase default region
+    AWS_S3_ENDPOINT_URL = f"{SUPABASE_PROJECT_URL}/storage/v1/s3"
+    AWS_ACCESS_KEY_ID = SUPABASE_ANON_KEY
+    AWS_SECRET_ACCESS_KEY = SUPABASE_ANON_KEY
+    AWS_QUERYSTRING_AUTH = False
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_S3_CUSTOM_DOMAIN = f"{SUPABASE_PROJECT_URL}/storage/v1/object/public/{AWS_STORAGE_BUCKET_NAME}"
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+elif ENVIRONMENT == 'production' and not USE_SUPABASE:
+    # Use traditional S3 for production (if Supabase not configured)
     INSTALLED_APPS = [*INSTALLED_APPS, 'storages']
     AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
     AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME') or None
