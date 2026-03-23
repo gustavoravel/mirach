@@ -6,153 +6,121 @@
     <title>{% block title %}Mirach - Previsão de Séries Temporais{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     {% load static %}
     <link href="{% static 'css/mirach.css' %}" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'projects:list' %}">
-                <i class="fas fa-star"></i> Mirach
+<body class="{% block body_class %}{% endblock %}">
+    <div id="wrapper">
+        {% if user.is_authenticated %}
+        <nav class="mirach-sidebar">
+            <a href="{% url 'projects:list' %}" class="sidebar-brand">
+                <i class="fas fa-star"></i>
+                <span>Mirach</span>
             </a>
-            
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto"></ul>
-                
-                <ul class="navbar-nav">
-                    {% if user.is_authenticated %}
+            <div class="sidebar-heading">Workspace</div>
+            <a href="{% url 'projects:list' %}" class="sidebar-link">
+                <i class="fas fa-project-diagram"></i>Projetos
+            </a>
+            <a href="{% url 'datasets:list' %}" class="sidebar-link">
+                <i class="fas fa-database"></i>Datasets
+            </a>
+            <a href="{% url 'predictions:list' %}" class="sidebar-link">
+                <i class="fas fa-chart-line"></i>Previsões
+            </a>
+            <div class="sidebar-heading">Ações rápidas</div>
+            <a href="{% url 'projects:create' %}" class="sidebar-link">
+                <i class="fas fa-plus-circle"></i>Novo Projeto
+            </a>
+            <a href="{% url 'datasets:upload' %}" class="sidebar-link">
+                <i class="fas fa-upload"></i>Upload Dataset
+            </a>
+            <a href="{% url 'predictions:create' %}" class="sidebar-link">
+                <i class="fas fa-bolt"></i>Nova Previsão
+            </a>
+        </nav>
+        {% endif %}
+
+        <div id="content-wrapper">
+            <nav class="topbar navbar navbar-expand navbar-light">
+                <div class="container-fluid">
+                    <a href="{% url 'projects:list' %}" class="navbar-brand topbar-brand">
+                        <i class="fas fa-star text-primary me-2"></i>Mirach
+                    </a>
+
+                    <ul class="navbar-nav ms-auto">
+                        {% if user.is_authenticated %}
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                                <i class="fas fa-user"></i> {{ user.username }}
+                            <a class="nav-link dropdown-toggle user-dropdown-trigger" href="#" role="button" data-bs-toggle="dropdown">
+                                <span class="d-none d-sm-inline me-2">{{ user.username }}</span>
+                                <i class="fas fa-user-circle"></i>
                             </a>
-                            <ul class="dropdown-menu">
-                                <li class="px-3 py-2 small text-muted">
+                            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                <li class="dropdown-item-text small text-muted">
                                     <div><i class="fas fa-envelope me-1"></i>{{ user.email|default:user.username }}</div>
                                     {% with sub=user.subscriptions.all|first %}
                                     {% if sub %}
-                                    <div class="d-flex align-items-center gap-2">
-                                        <span><i class="fas fa-crown me-1"></i>Plano:</span>
-                                        <span class="badge {% if sub.plan.code == 'pro' %}bg-success{% elif sub.plan.is_enterprise %}bg-warning text-dark{% else %}bg-secondary{% endif %}">{{ sub.plan.name }}</span>
-                                    </div>
-                                    {% if sub.trial_ends_at %}
-                                    <div><i class="fas fa-hourglass-half me-1"></i>Trial: até {{ sub.trial_ends_at|date:"d/m/Y" }}</div>
-                                    {% endif %}
+                                    <div class="mt-1"><i class="fas fa-crown me-1"></i>{{ sub.plan.name }}</div>
                                     {% endif %}
                                     {% endwith %}
                                     {% with cb=user.credit_balances.all|first %}
-                                    <div><i class="fas fa-coins me-1"></i>Créditos: {{ cb.balance|default:0 }}</div>
+                                    <div class="mt-1"><i class="fas fa-coins me-1"></i>Créditos: {{ cb.balance|default:0 }}</div>
                                     {% endwith %}
                                 </li>
-                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#pricingModal"><i class="fas fa-arrow-up-right-from-square me-1"></i> Fazer upgrade</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'accounts:profile' %}">
-                                    <i class="fas fa-user-circle"></i> Perfil
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'accounts:settings' %}">
-                                    <i class="fas fa-sliders-h"></i> Configurações
-                                </a></li>
-                                <li><a class="dropdown-item" href="{% url 'accounts:billing' %}">
-                                    <i class="fas fa-credit-card"></i> Pagamentos
-                                </a></li>
+                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#pricingModal"><i class="fas fa-arrow-up-right-from-square me-2"></i>Fazer upgrade</a></li>
+                                <li><a class="dropdown-item" href="{% url 'accounts:profile' %}"><i class="fas fa-user me-2"></i>Perfil</a></li>
+                                <li><a class="dropdown-item" href="{% url 'accounts:settings' %}"><i class="fas fa-sliders-h me-2"></i>Configurações</a></li>
+                                <li><a class="dropdown-item" href="{% url 'accounts:billing' %}"><i class="fas fa-credit-card me-2"></i>Pagamentos</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{% url 'accounts:logout' %}">
-                                    <i class="fas fa-sign-out-alt"></i> Sair
-                                </a></li>
+                                <li><a class="dropdown-item" href="{% url 'accounts:logout' %}"><i class="fas fa-sign-out-alt me-2"></i>Sair</a></li>
                             </ul>
                         </li>
-                    {% else %}
+                        {% else %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'accounts:login' %}">
-                                <i class="fas fa-sign-in-alt"></i> Entrar
-                            </a>
+                            <a class="nav-link" href="{% url 'accounts:login' %}"><i class="fas fa-sign-in-alt me-1"></i>Entrar</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'accounts:signup' %}">
-                                <i class="fas fa-user-plus"></i> Cadastrar
-                            </a>
+                            <a class="nav-link" href="{% url 'accounts:signup' %}"><i class="fas fa-user-plus me-1"></i>Cadastrar</a>
                         </li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Upgrade/Trial banner -->
-    {% if request.user.is_authenticated %}
-    {% with sub=request.user.subscriptions.all|first %}
-    {% if sub and sub.trial_ends_at %}
-    <div class="alert alert-warning text-center mb-0">
-        Seu trial termina em {{ sub.trial_ends_at|date:"d/m/Y" }}. <a href="{% url 'accounts:profile' %}">Faça upgrade</a> para manter recursos Pro.
-    </div>
-    {% endif %}
-    {% endwith %}
-    {% endif %}
-
-    <!-- Messages -->
-    {% if messages %}
-        <div class="container mt-3" style="margin-top: calc(var(--header-offset, 56px) + 12px) !important;">
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        {% endif %}
+                    </ul>
                 </div>
-            {% endfor %}
-        </div>
-    {% endif %}
+            </nav>
 
-    <!-- Main Content -->
-    <div class="container-fluid" style="padding-top: var(--header-offset, 56px);">
-        <div class="row">
-            {% if user.is_authenticated %}
-            <!-- Sidebar -->
-            <div class="col-md-2 p-0">
-                <div class="sidebar vh-100 position-fixed p-3 border-end bg-light" style="top: var(--header-offset, 56px); overflow-y:auto;">
-                    <div class="list-group list-group-flush">
-                        <a href="{% url 'projects:list' %}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-project-diagram"></i> Projetos
-                        </a>
-                        <a href="{% url 'datasets:list' %}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-database"></i> Datasets
-                        </a>
-                        <a href="{% url 'predictions:list' %}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-chart-line"></i> Previsões
-                        </a>
-                        <div class="mt-3 small text-muted px-2">Ações</div>
-                        <a href="{% url 'projects:create' %}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-plus"></i> Novo Projeto
-                        </a>
-                        <a href="{% url 'datasets:upload' %}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-upload"></i> Upload Dataset
-                        </a>
-                        <a href="{% url 'predictions:create' %}" class="list-group-item list-group-item-action">
-                            <i class="fas fa-chart-line"></i> Nova Previsão
-                        </a>
+            <main id="content" class="page-content">
+                {% if request.user.is_authenticated %}
+                {% with sub=request.user.subscriptions.all|first %}
+                {% if sub and sub.trial_ends_at %}
+                <div class="alert alert-warning d-flex align-items-center mb-4">
+                    <i class="fas fa-hourglass-half me-2"></i>
+                    <div>Seu trial termina em {{ sub.trial_ends_at|date:"d/m/Y" }}. <a href="{% url 'accounts:profile' %}">Faça upgrade</a> para manter recursos Pro.</div>
+                </div>
+                {% endif %}
+                {% endwith %}
+                {% endif %}
+
+                {% if messages %}
+                <div class="mb-4">
+                    {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                     </div>
+                    {% endfor %}
                 </div>
-            </div>
-            
-            <!-- Main Content Area -->
-            <div class="col-md-10 offset-md-2 main-content p-4">
-            {% else %}
-            <!-- Full width for non-authenticated users -->
-            <div class="col-12 main-content p-4">
-            {% endif %}
-                {% block content %}
-                {% endblock %}
-            </div>
+                {% endif %}
+
+                {% block content %}{% endblock %}
+            </main>
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{% static 'js/mirach.js' %}"></script>
-    {% block extra_js %}
-    {% endblock %}
+    {% block extra_js %}{% endblock %}
+
     <!-- Pricing Modal -->
     <div class="modal fade" id="pricingModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-centered">

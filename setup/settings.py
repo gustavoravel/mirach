@@ -158,8 +158,19 @@ CELERY_TASK_ROUTES = {
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
+database_config = env.db()  # parses DATABASE_URL
+
+# Docker service names like "db" are resolvable only inside Docker network.
+# When running directly on host (e.g. Windows + runserver), use localhost.
+if (
+    os.name == 'nt'
+    and database_config.get('HOST') == 'db'
+    and not env.bool('RUNNING_IN_DOCKER', default=False)
+):
+    database_config['HOST'] = '127.0.0.1'
+
 DATABASES = {
-    'default': env.db(),  # parses DATABASE_URL
+    'default': database_config,
 }
 
 

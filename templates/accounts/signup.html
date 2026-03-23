@@ -1,11 +1,21 @@
 {% extends 'base.html' %}
 
 {% block title %}Cadastro - Mirach{% endblock %}
+{% block body_class %}public-page{% endblock %}
 
 {% block content %}
-<div class="min-vh-100 d-flex align-items-center justify-content-center">
+<div class="auth-wrap">
     <div class="container">
-        <div class="row justify-content-center">
+        <div class="row justify-content-center align-items-center g-4">
+            <div class="col-lg-5 d-none d-lg-block text-center">
+                <div class="card border-0">
+                    <div class="card-body p-4">
+                        <i class="fas fa-palette fa-3x text-primary mb-3"></i>
+                        <p class="text-muted mb-2">Aproveite a galeria unDraw para enriquecer onboarding e empty states.</p>
+                        <a class="btn btn-sm btn-outline-primary" href="https://undraw.co/illustrations" target="_blank" rel="noopener noreferrer">Abrir unDraw</a>
+                    </div>
+                </div>
+            </div>
             <div class="col-md-6 col-lg-5">
                 <div class="card shadow-lg border-0">
                     <div class="card-header text-center py-4" style="background: var(--success-gradient); color: white;">

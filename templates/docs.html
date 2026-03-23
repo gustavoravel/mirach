@@ -3,23 +3,46 @@
 {% block title %}Docs da API - Mirach{% endblock %}
 
 {% block content %}
-<h2 class="mb-3"><i class="fas fa-book"></i> Documentação da API</h2>
-<p>Autenticação via header: <code>Authorization: Token &lt;seu_token&gt;</code></p>
+<div class="row g-4 align-items-center mb-4">
+  <div class="col-lg-8">
+    <h2 class="mb-2"><i class="fas fa-book text-primary me-2"></i>Documentação da API</h2>
+    <p class="mb-0 text-muted">Referência técnica no novo padrão visual do Mirach (inspirado no SB Admin 2), com foco em leitura rápida e operação.</p>
+  </div>
+  <div class="col-lg-4 text-lg-end">
+    <a class="btn btn-outline-primary" href="https://undraw.co/illustrations" target="_blank" rel="noopener noreferrer">Ilustrações unDraw</a>
+  </div>
+</div>
 
-<h5>Endpoints</h5>
-<ul>
-  <li><code>GET /predictions/api/ping/</code> — healthcheck</li>
-  <li><code>GET /predictions/api/v1/predictions/</code> — lista últimas previsões do usuário</li>
-  <li><code>GET /predictions/api/v1/predictions/&lt;id&gt;/</code> — detalhe (métricas, explainability, links de export)</li>
-</ul>
+<div class="card mb-4">
+  <div class="card-header">Autenticação</div>
+  <div class="card-body">
+    <p class="mb-0">Use o header <code>Authorization: Token &lt;seu_token&gt;</code>.</p>
+  </div>
+</div>
 
-<h5>Rate limiting</h5>
-<p>Configurável por env (DRF_USER_RATE, DRF_ANON_RATE). Padrão: 1000/day por usuário.</p>
+<div class="card mb-4">
+  <div class="card-header">Endpoints</div>
+  <div class="card-body">
+    <ul class="mb-0">
+      <li><code>GET /predictions/api/ping/</code> - healthcheck</li>
+      <li><code>GET /predictions/api/v1/predictions/</code> - lista últimas previsões do usuário</li>
+      <li><code>GET /predictions/api/v1/predictions/&lt;id&gt;/</code> - detalhe (métricas, explainability, links de export)</li>
+    </ul>
+  </div>
+</div>
 
-<h5>Webhooks</h5>
-<p>Configure <strong>Webhook de Conclusão</strong> no projeto. Evento enviado: <code>prediction.completed</code>.</p>
+<div class="card mb-4">
+  <div class="card-header">Rate limiting</div>
+  <div class="card-body">
+    <p class="mb-0">Configurável por env (DRF_USER_RATE, DRF_ANON_RATE). Padrão: 1000/day por usuário.</p>
+  </div>
+</div>
 
-<pre class="bg-light p-3 rounded"><code>{
+<div class="card">
+  <div class="card-header">Webhooks</div>
+  <div class="card-body">
+    <p>Configure <strong>Webhook de Conclusão</strong> no projeto. Evento enviado: <code>prediction.completed</code>.</p>
+    <pre class="bg-light p-3 rounded mb-0"><code>{
   "event": "prediction.completed",
   "prediction_id": 123,
   "project_id": 45,
@@ -27,6 +50,8 @@
   "metrics": {"rmse": 12.3, "mae": 9.8, "mape": 7.1, "r2": 0.82},
   "completed_at": "2025-09-23T13:37:00Z"
 }</code></pre>
+  </div>
+</div>
 
 {% endblock %}
 
