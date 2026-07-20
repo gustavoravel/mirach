@@ -3,58 +3,61 @@
 {% block title %}Meus Datasets - Mirach{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-database"></i> Meus Datasets</h2>
+<div class="page-header">
+    <div>
+        <h2><i class="fas fa-database me-2 text-primary"></i>Meus Datasets</h2>
+        <p class="subtitle">Fontes de dados prontas para alimentar previsões. O agente interpreta cada upload automaticamente.</p>
+    </div>
     <a href="{% url 'datasets:upload' %}" class="btn btn-primary">
-        <i class="fas fa-upload"></i> Upload Dataset
+        <i class="fas fa-upload me-1"></i> Upload Dataset
     </a>
 </div>
 
 {% if datasets %}
-    <div class="row">
+    <div class="row g-3">
         {% for dataset in datasets %}
-        <div class="col-md-6 col-lg-4 mb-4">
-            <div class="card h-100">
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 hover-lift">
                 <div class="card-body">
-                    <h5 class="card-title">{{ dataset.name }}</h5>
-                    <p class="card-text">
-                        <strong>Projeto:</strong> {{ dataset.project.name }}<br>
-                        <strong>Linhas:</strong> {{ dataset.total_rows|default:"N/A" }}<br>
-                        <strong>Colunas:</strong> {{ dataset.total_columns|default:"N/A" }}
-                    </p>
-                    <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0">{{ dataset.name }}</h5>
                         <span class="badge bg-{% if dataset.status == 'processed' %}success{% elif dataset.status == 'processing' %}warning{% elif dataset.status == 'error' %}danger{% else %}secondary{% endif %}">
                             {{ dataset.get_status_display }}
                         </span>
                     </div>
+                    <div class="small text-muted mb-1"><i class="fas fa-project-diagram me-1"></i>{{ dataset.project.name }}</div>
+                    <div class="small text-muted mb-2">
+                        <i class="fas fa-table me-1"></i>{{ dataset.total_rows|default:"—" }} linhas · {{ dataset.total_columns|default:"—" }} colunas
+                    </div>
+                    {% if dataset.ai_interpretation.inferred_domain %}
+                    <span class="ai-chip mb-2"><i class="fas fa-robot"></i>{{ dataset.ai_interpretation.inferred_domain }}</span>
+                    {% endif %}
                     {% if dataset.description %}
-                        <p class="card-text text-muted">{{ dataset.description|truncatechars:100 }}</p>
+                        <p class="card-text text-muted small mb-0">{{ dataset.description|truncatechars:100 }}</p>
                     {% endif %}
                 </div>
-                <div class="card-footer">
-                    <div class="btn-group w-100" role="group">
-                        <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-eye"></i> Ver
-                        </a>
-                        <a href="{% url 'datasets:mapping' dataset.pk %}" class="btn btn-outline-info btn-sm">
-                            <i class="fas fa-cogs"></i> Mapear
-                        </a>
-                        <a href="{% url 'datasets:delete' dataset.pk %}" class="btn btn-outline-danger btn-sm">
-                            <i class="fas fa-trash"></i> Excluir
-                        </a>
-                    </div>
+                <div class="card-footer d-flex gap-2">
+                    <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-outline-primary btn-sm flex-fill">
+                        <i class="fas fa-eye me-1"></i>Ver
+                    </a>
+                    <a href="{% url 'datasets:mapping' dataset.pk %}" class="btn btn-outline-secondary btn-sm flex-fill">
+                        <i class="fas fa-table-columns me-1"></i>Mapear
+                    </a>
+                    <a href="{% url 'datasets:delete' dataset.pk %}" class="btn btn-outline-danger btn-sm">
+                        <i class="fas fa-trash"></i>
+                    </a>
                 </div>
             </div>
         </div>
         {% endfor %}
     </div>
 {% else %}
-    <div class="text-center py-5">
-        <i class="fas fa-database fa-3x text-muted mb-3"></i>
-        <h4 class="text-muted">Nenhum dataset encontrado</h4>
-        <p class="text-muted">Faça upload do seu primeiro dataset para começar a fazer previsões.</p>
+    <div class="empty-state">
+        <span class="empty-icon"><i class="fas fa-database"></i></span>
+        <h4>Nenhum dataset ainda</h4>
+        <p>Envie um CSV ou Excel e o agente de IA identifica as colunas de data, alvo e variáveis explicativas para você.</p>
         <a href="{% url 'datasets:upload' %}" class="btn btn-primary">
-            <i class="fas fa-upload"></i> Upload Primeiro Dataset
+            <i class="fas fa-upload me-1"></i> Enviar primeiro dataset
         </a>
     </div>
 {% endif %}

@@ -3,15 +3,13 @@
 {% block title %}Meus Projetos - Mirach{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-5">
+<div class="page-header">
     <div>
-        <h2 class="text-gradient mb-2">
-            <i class="fas fa-project-diagram me-3"></i>Meus Projetos
-        </h2>
-        <p class="text-muted mb-0">Gerencie seus projetos de previsão de séries temporais</p>
+        <h2><i class="fas fa-project-diagram me-2 text-primary"></i>Meus Projetos</h2>
+        <p class="subtitle">Organize datasets e previsões por contexto de negócio.</p>
     </div>
-    <a href="{% url 'projects:create' %}" class="btn btn-primary btn-lg">
-        <i class="fas fa-plus me-2"></i>Novo Projeto
+    <a href="{% url 'projects:create' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i>Novo Projeto
     </a>
 </div>
 
@@ -83,36 +81,29 @@
         {% endfor %}
     </div>
 {% else %}
-    <div class="text-center py-5">
-        <div class="empty-state">
-            <div class="empty-icon mb-4">
-                <i class="fas fa-project-diagram"></i>
-            </div>
-            <h4 class="text-muted mb-3">Nenhum projeto encontrado</h4>
-            <p class="text-muted mb-4">
-                Crie seu primeiro projeto para começar a fazer previsões de séries temporais 
-                com algoritmos de machine learning avançados.
-            </p>
-            <a href="{% url 'projects:create' %}" class="btn btn-primary btn-lg">
-                <i class="fas fa-plus me-2"></i>Criar Primeiro Projeto
-            </a>
-        </div>
+    <div class="empty-state">
+        <span class="empty-icon"><i class="fas fa-project-diagram"></i></span>
+        <h4>Nenhum projeto ainda</h4>
+        <p>Crie seu primeiro projeto para organizar datasets e gerar previsões com o agente de IA.</p>
+        <a href="{% url 'projects:create' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>Criar Primeiro Projeto
+        </a>
     </div>
 {% endif %}
 {% endblock %}
 
-{% block extra_js %}
+{% block extra_css %}
 <style>
 .project-icon {
-    width: 50px;
-    height: 50px;
+    width: 44px;
+    height: 44px;
     background: var(--primary-gradient);
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
 }
 
 .stat-box {
@@ -120,21 +111,21 @@
     align-items: center;
     gap: 10px;
     padding: 10px;
-    background: rgba(102, 126, 234, 0.05);
-    border-radius: 8px;
-    border: 1px solid rgba(102, 126, 234, 0.1);
+    background: var(--surface);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
 }
 
 .stat-icon {
-    width: 35px;
-    height: 35px;
+    width: 32px;
+    height: 32px;
     background: var(--primary-gradient);
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
 }
 
 .stat-content {
@@ -142,35 +133,17 @@
 }
 
 .stat-number {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     font-weight: 700;
-    color: #495057;
+    color: #0f172a;
     line-height: 1;
 }
 
 .stat-label {
-    font-size: 0.8rem;
-    color: #6c757d;
+    font-size: 0.72rem;
+    color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.empty-state {
-    max-width: 500px;
-    margin: 0 auto;
-}
-
-.empty-icon {
-    width: 120px;
-    height: 120px;
-    background: var(--light-gradient);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto;
-    font-size: 3rem;
-    color: #6c757d;
+    letter-spacing: 0.05em;
 }
 </style>
 {% endblock %}

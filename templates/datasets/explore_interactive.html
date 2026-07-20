@@ -26,107 +26,14 @@
     justify-content: center;
 }
 
-.card {
-    transition: transform 0.2s ease-in-out;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-}
-
-/* FORÇAR VISIBILIDADE DAS ABAS - SELETORES ESPECÍFICOS */
-#data-tabs {
-    border-bottom: 3px solid #dee2e6 !important;
-    margin-bottom: 1rem !important;
-    background: #f8f9fa !important;
-    padding: 0.5rem !important;
-    border-radius: 0.5rem 0.5rem 0 0 !important;
-    display: flex !important;
-    list-style: none !important;
-}
-
-#data-tabs .nav-item {
-    margin-right: 0.5rem !important;
-}
-
 #data-tabs .nav-link {
-    border: 2px solid #dee2e6 !important;
-    border-bottom: none !important;
-    border-radius: 0.5rem 0.5rem 0 0 !important;
-    color: #495057 !important;
-    font-weight: 600 !important;
-    padding: 0.75rem 1.5rem !important;
-    background: #e9ecef !important;
-    text-decoration: none !important;
-    display: inline-block !important;
-    min-width: 120px !important;
-    text-align: center !important;
-    cursor: pointer !important;
-    transition: all 0.3s ease !important;
-}
-
-#data-tabs .nav-link:hover {
-    border-color: #adb5bd !important;
-    background: #dee2e6 !important;
-    color: #212529 !important;
-    transform: translateY(-2px) !important;
+    color: var(--text-muted);
+    font-weight: 600;
 }
 
 #data-tabs .nav-link.active {
-    color: #0d6efd !important;
-    background-color: #fff !important;
-    border-color: #0d6efd #0d6efd #fff !important;
-    border-bottom: 3px solid #0d6efd !important;
-    font-weight: 700 !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-}
-
-/* FORÇAR VISIBILIDADE DO BOTÃO VOLTAR - SELETORES ESPECÍFICOS */
-a[href*="/datasets/"] {
-    background-color: #ffffff !important;
-    border: 3px solid #0d6efd !important;
-    color: #0d6efd !important;
-    font-weight: 700 !important;
-    padding: 0.75rem 1.5rem !important;
-    border-radius: 0.5rem !important;
-    text-decoration: none !important;
-    display: inline-block !important;
-    min-width: 120px !important;
-    text-align: center !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-    transition: all 0.3s ease !important;
-}
-
-a[href*="/datasets/"]:hover {
-    background-color: #0d6efd !important;
-    border-color: #0d6efd !important;
-    color: #ffffff !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.3) !important;
-    text-decoration: none !important;
-}
-
-/* Garantir contraste no header */
-.card-header.bg-primary {
-    background-color: #0d6efd !important;
-    padding: 1.5rem !important;
-}
-
-.card-header.bg-primary a[href*="/datasets/"] {
-    background-color: #ffffff !important;
-    border: 3px solid #ffffff !important;
-    color: #0d6efd !important;
-    font-weight: 700 !important;
-    padding: 0.75rem 1.5rem !important;
-    border-radius: 0.5rem !important;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-}
-
-.card-header.bg-primary a[href*="/datasets/"]:hover {
-    background-color: #f8f9fa !important;
-    border-color: #f8f9fa !important;
-    color: #0d6efd !important;
-    transform: translateY(-2px) !important;
+    color: var(--primary);
+    font-weight: 700;
 }
 </style>
 {% endblock %}
@@ -134,31 +41,17 @@ a[href*="/datasets/"]:hover {
 {% block content %}
 <div class="container-fluid">
     <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-primary text-white">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h4 class="mb-1">
-                                <i class="fas fa-database me-2"></i>Exploração Interativa de Dataset
-                            </h4>
-                            <p class="mb-0 opacity-75">
-                                <strong>Dataset:</strong> {{ dataset.name }} | 
-                                <strong>Projeto:</strong> {{ dataset.project.name }} |
-                                <strong>Status:</strong> 
-                                <span class="badge bg-light text-dark">{{ dataset.get_status_display }}</span>
-                            </p>
-                        </div>
-                        <div>
-                            <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-light" style="background-color: #ffffff !important; border: 3px solid #0d6efd !important; color: #0d6efd !important; font-weight: 700 !important; padding: 0.75rem 1.5rem !important; border-radius: 0.5rem !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;">
-                                <i class="fas fa-arrow-left"></i> Voltar
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+    <div class="page-header">
+        <div>
+            <h2><i class="fas fa-database me-2 text-primary"></i>Exploração Interativa</h2>
+            <p class="subtitle">
+                {{ dataset.name }} · {{ dataset.project.name }} ·
+                <span class="badge bg-{% if dataset.status == 'processed' %}success{% elif dataset.status == 'error' %}danger{% else %}secondary{% endif %}">{{ dataset.get_status_display }}</span>
+            </p>
         </div>
+        <a href="{% url 'datasets:detail' dataset.pk %}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i>Voltar
+        </a>
     </div>
 
     <!-- Metrics Cards -->

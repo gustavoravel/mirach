@@ -127,41 +127,48 @@
         {% endif %}
 
         {% if prediction.status == 'completed' and prediction.explainability %}
+        {% if prediction.explainability.ai_insights %}
+        <div class="ai-panel mb-4">
+            <div class="ai-panel-header">
+                <span class="ai-avatar"><i class="fas fa-robot"></i></span>
+                Análise do agente Mirach
+                <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
+            </div>
+            <div class="ai-panel-body">
+                <p class="mb-3">{{ prediction.explainability.ai_insights.summary }}</p>
+                {% if prediction.explainability.ai_insights.drivers %}
+                <div class="mb-1 fw-bold small text-uppercase text-muted">Drivers</div>
+                <ul class="ai-insight-list mb-3">
+                  {% for d in prediction.explainability.ai_insights.drivers %}
+                  <li><i class="fas fa-arrow-trend-up"></i><span>{{ d }}</span></li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+                {% if prediction.explainability.ai_insights.risks %}
+                <div class="mb-1 fw-bold small text-uppercase text-muted">Riscos</div>
+                <ul class="ai-insight-list mb-3">
+                  {% for r in prediction.explainability.ai_insights.risks %}
+                  <li><i class="fas fa-triangle-exclamation"></i><span>{{ r }}</span></li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+                {% if prediction.explainability.ai_insights.next_steps %}
+                <div class="mb-1 fw-bold small text-uppercase text-muted">Próximos passos</div>
+                <ul class="ai-insight-list mb-0">
+                  {% for s in prediction.explainability.ai_insights.next_steps %}
+                  <li><i class="fas fa-circle-check"></i><span>{{ s }}</span></li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% if prediction.explainability.feature_importances or prediction.explainability.coefficients %}
         <div class="card mb-4">
             <div class="card-header">
-                <h6><i class="fas fa-lightbulb"></i> Explainability</h6>
+                <h6 class="mb-0"><i class="fas fa-lightbulb me-1"></i> Explainability</h6>
             </div>
             <div class="card-body">
-                {% if prediction.explainability.ai_insights %}
-                <div class="mb-3">
-                    <strong>Insights (IA)</strong>
-                    <p class="mb-2">{{ prediction.explainability.ai_insights.summary }}</p>
-                    {% if prediction.explainability.ai_insights.drivers %}
-                    <div class="mb-1"><small class="text-muted">Drivers</small></div>
-                    <ul class="small">
-                      {% for d in prediction.explainability.ai_insights.drivers %}
-                      <li>{{ d }}</li>
-                      {% endfor %}
-                    </ul>
-                    {% endif %}
-                    {% if prediction.explainability.ai_insights.risks %}
-                    <div class="mb-1"><small class="text-muted">Riscos</small></div>
-                    <ul class="small">
-                      {% for r in prediction.explainability.ai_insights.risks %}
-                      <li>{{ r }}</li>
-                      {% endfor %}
-                    </ul>
-                    {% endif %}
-                    {% if prediction.explainability.ai_insights.next_steps %}
-                    <div class="mb-1"><small class="text-muted">Próximos passos</small></div>
-                    <ul class="small">
-                      {% for s in prediction.explainability.ai_insights.next_steps %}
-                      <li>{{ s }}</li>
-                      {% endfor %}
-                    </ul>
-                    {% endif %}
-                </div>
-                {% endif %}
                 {% if prediction.explainability.feature_importances %}
                 <div class="mb-2"><strong>Importâncias</strong></div>
                 <pre class="small bg-light p-2 rounded">{{ prediction.explainability.feature_importances|safe }}</pre>
@@ -170,11 +177,9 @@
                 <div class="mb-2"><strong>Coeficientes</strong></div>
                 <pre class="small bg-light p-2 rounded">{{ prediction.explainability.coefficients|safe }}</pre>
                 {% endif %}
-                {% if not prediction.explainability.ai_insights and not prediction.explainability.feature_importances and not prediction.explainability.coefficients %}
-                <small class="text-muted">Sem dados de explainability para este modelo.</small>
-                {% endif %}
             </div>
         </div>
+        {% endif %}
         {% endif %}
     </div>
     
@@ -393,7 +398,7 @@ setTimeout(checkStatus, 2000);
 <style>
 .info-item {
     padding: 8px 0;
-    border-bottom: 1px solid #f8f9fa;
+    border-bottom: 1px solid var(--border);
 }
 
 .info-item:last-child {
@@ -404,23 +409,29 @@ setTimeout(checkStatus, 2000);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     padding: 8px 0;
-    border-bottom: 1px solid #f8f9fa;
+    border-bottom: 1px solid var(--border);
 }
 
 .metric-item:last-child {
     border-bottom: none;
 }
 
-.metric-label {
+.metric-item .metric-label {
     font-weight: 600;
-    color: #495057;
+    color: var(--text);
+    font-size: 0.85rem;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
-.metric-value {
-    font-size: 1.1rem;
+.metric-item .metric-value {
+    font-size: 1.05rem;
     font-weight: 700;
-    color: #667eea;
+    color: var(--primary);
 }
 
 .progress {

@@ -6,10 +6,11 @@
     <title>{% block title %}Mirach - Previsão de Séries Temporais{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     {% load static %}
     <link href="{% static 'css/mirach.css' %}" rel="stylesheet">
     {% block extra_head %}{% endblock %}
+    {% block extra_css %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <div id="wrapper">
@@ -20,37 +21,64 @@
                 <span>Mirach</span>
             </a>
             <div class="sidebar-heading">Workspace</div>
-            <a href="{% url 'projects:list' %}" class="sidebar-link">
+            <a href="{% url 'projects:list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'projects' %}active{% endif %}">
                 <i class="fas fa-project-diagram"></i>Projetos
             </a>
-            <a href="{% url 'datasets:list' %}" class="sidebar-link">
+            <a href="{% url 'datasets:list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'datasets' %}active{% endif %}">
                 <i class="fas fa-database"></i>Datasets
             </a>
-            <a href="{% url 'predictions:list' %}" class="sidebar-link">
+            <a href="{% url 'predictions:list' %}" class="sidebar-link {% if request.resolver_match.namespace == 'predictions' %}active{% endif %}">
                 <i class="fas fa-chart-line"></i>Previsões
             </a>
             <div class="sidebar-heading">Ações rápidas</div>
-            <a href="{% url 'projects:create' %}" class="sidebar-link">
-                <i class="fas fa-plus-circle"></i>Novo Projeto
-            </a>
             <a href="{% url 'datasets:upload' %}" class="sidebar-link">
                 <i class="fas fa-upload"></i>Upload Dataset
             </a>
-            <a href="{% url 'predictions:create' %}" class="sidebar-link">
-                <i class="fas fa-bolt"></i>Nova Previsão
+            <a href="{% url 'predictions:wizard' %}" class="sidebar-link">
+                <i class="fas fa-wand-magic-sparkles"></i>Nova Previsão
             </a>
+            <a href="{% url 'projects:create' %}" class="sidebar-link">
+                <i class="fas fa-plus-circle"></i>Novo Projeto
+            </a>
+
+            <div class="sidebar-ai-card mt-4">
+                <div class="ai-title"><i class="fas fa-robot"></i>Agente Mirach IA</div>
+                <p class="mb-2">Interpretação de dados, seleção de modelos e insights automáticos com Nemotron.</p>
+                <a href="{% url 'predictions:wizard' %}" class="btn btn-sm btn-light w-100">
+                    <i class="fas fa-wand-magic-sparkles me-1"></i>Previsão assistida
+                </a>
+            </div>
         </nav>
+        <div id="sidebarBackdrop"></div>
         {% endif %}
 
         <div id="content-wrapper">
             <nav class="topbar navbar navbar-expand navbar-light">
                 <div class="container-fluid">
-                    <a href="{% url 'projects:list' %}" class="navbar-brand topbar-brand">
+                    {% if user.is_authenticated %}
+                    <button class="sidebar-toggle-btn me-2" id="sidebarToggle" type="button" aria-label="Abrir menu">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <a href="{% url 'projects:list' %}" class="navbar-brand topbar-brand d-lg-none">
                         <i class="fas fa-star text-primary me-2"></i>Mirach
                     </a>
+                    {% else %}
+                    <a href="{% url 'accounts:landing' %}" class="navbar-brand topbar-brand">
+                        <i class="fas fa-star text-primary me-2"></i>Mirach
+                    </a>
+                    {% endif %}
 
-                    <ul class="navbar-nav ms-auto">
+                    <ul class="navbar-nav ms-auto align-items-center">
                         {% if user.is_authenticated %}
+                        {% with sub=user.subscriptions.all|first %}
+                        {% if not sub or sub.plan.code == 'free' %}
+                        <li class="nav-item me-3 d-none d-sm-block">
+                            <button class="btn btn-upgrade" type="button" data-bs-toggle="modal" data-bs-target="#pricingModal">
+                                <i class="fas fa-crown me-1"></i>Upgrade para Pro
+                            </button>
+                        </li>
+                        {% endif %}
+                        {% endwith %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle user-dropdown-trigger" href="#" role="button" data-bs-toggle="dropdown">
                                 <span class="d-none d-sm-inline me-2">{{ user.username }}</span>
@@ -81,8 +109,8 @@
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'accounts:login' %}"><i class="fas fa-sign-in-alt me-1"></i>Entrar</a>
                         </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{% url 'accounts:signup' %}"><i class="fas fa-user-plus me-1"></i>Cadastrar</a>
+                        <li class="nav-item ms-2">
+                            <a class="btn btn-primary btn-sm" href="{% url 'accounts:signup' %}">Criar conta grátis</a>
                         </li>
                         {% endif %}
                     </ul>
@@ -125,74 +153,71 @@
     <div class="modal fade" id="pricingModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title"><i class="fas fa-crown me-2"></i> Planos Mirach</h5>
+          <div class="modal-header border-0 pb-0">
+            <div>
+              <h5 class="modal-title"><i class="fas fa-crown me-2 text-warning"></i>Planos Mirach</h5>
+              <p class="text-muted small mb-0">Desbloqueie modelos avançados, backtesting e o agente de IA sem limites.</p>
+            </div>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
             {% with sub=user.subscriptions.all|first %}
             <div class="row g-3">
               <div class="col-md-4">
-                <div class="card h-100">
-                  <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Free</span>
+                <div class="pricing-card">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">Free</span>
                     {% if sub and sub.plan.code == 'free' %}<span class="badge bg-secondary">Atual</span>{% endif %}
                   </div>
-                  <div class="card-body">
-                    <div class="h4 mb-2">R$ 0<span class="small text-muted">/mês</span></div>
-                    <ul class="small mb-3">
-                      <li>1 projeto</li>
-                      <li>2 datasets</li>
-                      <li>5 previsões/mês</li>
-                      <li>50k linhas/dataset</li>
-                      <li>Prioridade baixa</li>
-                    </ul>
-                    <form method="post" action="{% url 'accounts:billing' %}">
-                      {% csrf_token %}
-                      <input type="hidden" name="plan" value="free" />
-                      <button class="btn btn-outline-secondary w-100" type="submit" {% if sub and sub.plan.code == 'free' %}disabled{% endif %}>{% if sub and sub.plan.code == 'free' %}Plano atual{% else %}Escolher{% endif %}</button>
-                    </form>
-                  </div>
+                  <div class="h4 mb-3">R$ 0<span class="small text-muted fw-normal">/mês</span></div>
+                  <ul>
+                    <li><i class="fas fa-check"></i>1 projeto</li>
+                    <li><i class="fas fa-check"></i>2 datasets</li>
+                    <li><i class="fas fa-check"></i>5 previsões/mês</li>
+                    <li><i class="fas fa-check"></i>50k linhas/dataset</li>
+                  </ul>
+                  <form method="post" action="{% url 'accounts:billing' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="plan" value="free" />
+                    <button class="btn btn-outline-secondary w-100" type="submit" {% if sub and sub.plan.code == 'free' %}disabled{% endif %}>{% if sub and sub.plan.code == 'free' %}Plano atual{% else %}Escolher{% endif %}</button>
+                  </form>
                 </div>
               </div>
               <div class="col-md-4">
-                <div class="card h-100">
-                  <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Pro</span>
+                <div class="pricing-card featured">
+                  <span class="plan-tag">Mais popular</span>
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">Pro</span>
                     {% if sub and sub.plan.code == 'pro' %}<span class="badge bg-success">Atual</span>{% endif %}
                   </div>
-                  <div class="card-body">
-                    <div class="h4 mb-2">R$ 99<span class="small text-muted">/mês</span></div>
-                    <ul class="small mb-3">
-                      <li>Projetos/datasets ilimitados</li>
-                      <li>Modelos avançados</li>
-                      <li>Backtesting e export</li>
-                      <li>Prioridade alta</li>
-                    </ul>
-                    <form method="post" action="{% url 'accounts:billing' %}">
-                      {% csrf_token %}
-                      <input type="hidden" name="plan" value="pro" />
-                      <button class="btn btn-primary w-100" type="submit" {% if sub and sub.plan.code == 'pro' %}disabled{% endif %}>{% if sub and sub.plan.code == 'pro' %}Plano atual{% else %}Assinar Pro{% endif %}</button>
-                    </form>
-                  </div>
+                  <div class="h4 mb-3">R$ 99<span class="small text-muted fw-normal">/mês</span></div>
+                  <ul>
+                    <li><i class="fas fa-check"></i>Projetos e datasets ilimitados</li>
+                    <li><i class="fas fa-check"></i>Agente de IA completo</li>
+                    <li><i class="fas fa-check"></i>Backtesting e export</li>
+                    <li><i class="fas fa-check"></i>Prioridade alta na fila</li>
+                  </ul>
+                  <form method="post" action="{% url 'accounts:billing' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="plan" value="pro" />
+                    <button class="btn btn-primary w-100" type="submit" {% if sub and sub.plan.code == 'pro' %}disabled{% endif %}>{% if sub and sub.plan.code == 'pro' %}Plano atual{% else %}Assinar Pro{% endif %}</button>
+                  </form>
                 </div>
               </div>
               <div class="col-md-4">
-                <div class="card h-100">
-                  <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Business</span>
+                <div class="pricing-card">
+                  <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-bold">Business</span>
                     {% if sub and sub.plan.is_enterprise %}<span class="badge bg-warning text-dark">Atual</span>{% endif %}
                   </div>
-                  <div class="card-body">
-                    <div class="h4 mb-2">Sob consulta</div>
-                    <ul class="small mb-3">
-                      <li>SSO, RBAC avançado</li>
-                      <li>Ambientes isolados</li>
-                      <li>SLAs e suporte dedicado</li>
-                      <li>Prioridade máxima</li>
-                    </ul>
-                    <a class="btn btn-outline-primary w-100" href="{% url 'accounts:billing' %}">Falar com vendas</a>
-                  </div>
+                  <div class="h4 mb-3">Sob consulta</div>
+                  <ul>
+                    <li><i class="fas fa-check"></i>SSO e RBAC avançado</li>
+                    <li><i class="fas fa-check"></i>Ambientes isolados</li>
+                    <li><i class="fas fa-check"></i>SLAs e suporte dedicado</li>
+                    <li><i class="fas fa-check"></i>Prioridade máxima</li>
+                  </ul>
+                  <a class="btn btn-outline-primary w-100" href="{% url 'accounts:billing' %}">Falar com vendas</a>
                 </div>
               </div>
             </div>

@@ -3,8 +3,13 @@
 {% block title %}Nova Previsão (Wizard) - Mirach{% endblock %}
 
 {% block content %}
-<div class="container py-4">
-  <h3 class="mb-3">Criar Previsão</h3>
+<div class="container py-4" style="max-width: 860px;">
+  <div class="page-header">
+    <div>
+      <h2><i class="fas fa-wand-magic-sparkles me-2 text-primary"></i>Nova Previsão</h2>
+      <p class="subtitle">Escolha os dados, deixe o agente selecionar o modelo e ajuste os parâmetros finais.</p>
+    </div>
+  </div>
   <ul class="nav nav-pills mb-4">
     <li class="nav-item"><span class="nav-link {% if step == 1 %}active{% endif %}">1. Dados</span></li>
     <li class="nav-item"><span class="nav-link {% if step == 2 %}active{% endif %}">2. Modelo</span></li>
@@ -39,14 +44,28 @@
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="step" value="2" />
-    <div class="mb-3 form-check">
-      <input class="form-check-input" type="checkbox" value="1" id="autoMode" name="auto_mode">
-      <label class="form-check-label" for="autoMode">
-        Modo Auto (campeonato empírico + IA Nemotron)
-      </label>
-      <div class="form-text">Seleciona o algoritmo com melhor RMSE no walk-forward e opcionalmente usa NVIDIA NIM para refinar o plano.</div>
+    <input class="d-none" type="checkbox" value="1" id="autoMode" name="auto_mode" checked>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-6">
+        <div class="mode-option selected" id="modeAuto" role="button" tabindex="0">
+          <div class="mode-title mb-1">
+            <span class="ai-badge"><i class="fas fa-robot"></i>Recomendado</span>
+          </div>
+          <div class="mode-title mb-1"><i class="fas fa-wand-magic-sparkles text-primary"></i>Modo Auto com IA</div>
+          <p class="small text-muted mb-0">O agente executa um campeonato empírico (walk-forward) entre os modelos e usa o Nemotron para escolher o algoritmo e os hiperparâmetros com melhor RMSE.</p>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="mode-option" id="modeManual" role="button" tabindex="0">
+          <div class="mode-title mb-1" style="min-height: 26px;"></div>
+          <div class="mode-title mb-1"><i class="fas fa-sliders-h text-muted"></i>Escolha manual</div>
+          <p class="small text-muted mb-0">Você seleciona o modelo e ajusta os hiperparâmetros manualmente. Ideal quando já conhece o comportamento da série.</p>
+        </div>
+      </div>
     </div>
-    <div class="mb-3" id="manualModelBlock">
+
+    <div class="mb-3 d-none" id="manualModelBlock">
       <label class="form-label">Modelo</label>
       <select name="model" class="form-select" id="modelSelect">
         <option value="" disabled selected>Selecione</option>
@@ -66,19 +85,26 @@
       const auto = document.getElementById('autoMode');
       const block = document.getElementById('manualModelBlock');
       const sel = document.getElementById('modelSelect');
-      function sync(){
-        if(!auto || !block || !sel) return;
-        if(auto.checked){
-          block.style.opacity = '0.5';
+      const cardAuto = document.getElementById('modeAuto');
+      const cardManual = document.getElementById('modeManual');
+
+      function setMode(isAuto){
+        auto.checked = isAuto;
+        cardAuto.classList.toggle('selected', isAuto);
+        cardManual.classList.toggle('selected', !isAuto);
+        block.classList.toggle('d-none', isAuto);
+        if(isAuto){
           sel.removeAttribute('required');
           sel.disabled = true;
         } else {
-          block.style.opacity = '1';
           sel.disabled = false;
           sel.setAttribute('required', 'required');
         }
       }
-      if(auto){ auto.addEventListener('change', sync); sync(); }
+
+      cardAuto.addEventListener('click', function(){ setMode(true); });
+      cardManual.addEventListener('click', function(){ setMode(false); });
+      setMode(true);
     })();
   </script>
   {% elif step == 3 %}
@@ -86,10 +112,22 @@
     {% csrf_token %}
     <input type="hidden" name="step" value="3" />
     {% if state.auto_plan %}
-    <div class="alert alert-success">
-      <strong>Plano Auto:</strong> {{ state.auto_plan.algorithm }}
-      {% if state.auto_plan.rationale %}<br><small>{{ state.auto_plan.rationale }}</small>{% endif %}
-      {% if state.auto_plan.beats_baseline == False %}<br><small class="text-warning">Atenção: não superou o baseline naive.</small>{% endif %}
+    <div class="ai-panel mb-4">
+      <div class="ai-panel-header">
+        <span class="ai-avatar"><i class="fas fa-robot"></i></span>
+        Plano do agente Mirach
+        <span class="ai-chip ms-auto"><i class="fas fa-trophy"></i>{{ state.auto_plan.algorithm }}</span>
+      </div>
+      <div class="ai-panel-body">
+        {% if state.auto_plan.rationale %}
+        <p class="small mb-2">{{ state.auto_plan.rationale }}</p>
+        {% endif %}
+        {% if state.auto_plan.beats_baseline == False %}
+        <div class="d-flex align-items-center gap-2 small text-warning">
+          <i class="fas fa-triangle-exclamation"></i>Atenção: o modelo escolhido não superou o baseline naive. Interprete a previsão com cautela.
+        </div>
+        {% endif %}
+      </div>
     </div>
     {% endif %}
     <div class="row">

@@ -1,54 +1,55 @@
 {% extends 'base.html' %}
 
-{% block title %}Mirach - Forecasting para equipes modernas{% endblock %}
+{% block title %}Mirach - Forecasting com agente de IA{% endblock %}
 {% block body_class %}public-page{% endblock %}
 
 {% block content %}
 <section class="landing-hero">
     <div class="container">
         <div class="row align-items-center g-5">
-            <div class="col-lg-6">
-                <span class="badge bg-light text-primary mb-3">Forecasting com IA</span>
-                <h1 class="display-5 fw-bold mb-3">Previsões melhores em menos tempo.</h1>
-                <p class="lead mb-4">Estruture dados, execute modelos e acompanhe métricas em um dashboard no estilo analítico para tomada de decisão.</p>
-                <div class="d-flex flex-wrap gap-2">
-                    <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-lg">Criar conta grátis</a>
+            <div class="col-lg-7">
+                <span class="hero-badge mb-3"><i class="fas fa-robot"></i>Agente de IA + modelos estatísticos validados</span>
+                <h1 class="display-5 fw-bold mb-3 mt-3">Previsões confiáveis, explicadas por um agente de IA.</h1>
+                <p class="lead mb-4">Envie seus dados e deixe o agente Mirach interpretar as colunas, escolher o melhor modelo por competição empírica e explicar cada resultado em linguagem de negócio.</p>
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-lg fw-bold">Começar grátis</a>
                     <a href="{% url 'accounts:login' %}" class="btn btn-outline-light btn-lg">Entrar</a>
                 </div>
-                <div class="row g-3 mt-4">
+                <small class="d-block mb-4" style="color: rgba(255,255,255,0.6);">Sem cartão de crédito. 5 previsões grátis por mês.</small>
+                <div class="row g-3">
                     <div class="col-sm-4">
-                        <div class="card kpi-card">
-                            <div class="card-body py-3">
-                                <div class="h5 mb-0">95%</div>
-                                <small>Acurácia média</small>
-                            </div>
+                        <div class="kpi-card">
+                            <div class="h5 mb-0">9+ modelos</div>
+                            <small>ARIMA a LightGBM</small>
                         </div>
                     </div>
                     <div class="col-sm-4">
-                        <div class="card kpi-card">
-                            <div class="card-body py-3">
-                                <div class="h5 mb-0">5 min</div>
-                                <small>Primeiro setup</small>
-                            </div>
+                        <div class="kpi-card">
+                            <div class="h5 mb-0">Walk-forward</div>
+                            <small>Validação honesta</small>
                         </div>
                     </div>
                     <div class="col-sm-4">
-                        <div class="card kpi-card">
-                            <div class="card-body py-3">
-                                <div class="h5 mb-0">+20%</div>
-                                <small>Ganho médio</small>
-                            </div>
+                        <div class="kpi-card">
+                            <div class="h5 mb-0">5 min</div>
+                            <small>Do upload ao insight</small>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-6 text-center">
-                <div class="card border-0">
-                    <div class="card-body p-4 p-lg-5">
-                        <i class="fas fa-image fa-3x text-primary mb-3"></i>
-                        <h5 class="fw-bold">Ilustrações unDraw</h5>
-                        <p class="text-muted">Selecione ilustrações gratuitas para telas de onboarding, empty states e marketing.</p>
-                        <a class="btn btn-outline-primary" href="https://undraw.co/illustrations" target="_blank" rel="noopener noreferrer">Abrir galeria</a>
+            <div class="col-lg-5">
+                <div class="ai-panel">
+                    <div class="ai-panel-header">
+                        <span class="ai-avatar"><i class="fas fa-robot"></i></span>
+                        Agente Mirach
+                        <span class="ai-badge ms-auto"><i class="fas fa-circle fa-2xs"></i>Ativo</span>
+                    </div>
+                    <div class="ai-panel-body">
+                        <ul class="ai-insight-list">
+                            <li><i class="fas fa-table-columns"></i><span>Identifiquei <strong>Date</strong> como timestamp e <strong>Weekly_Sales</strong> como variável alvo.</span></li>
+                            <li><i class="fas fa-trophy"></i><span>O campeonato de modelos apontou <strong>LightGBM</strong> com RMSE 12% menor que o baseline.</span></li>
+                            <li><i class="fas fa-lightbulb"></i><span>Detectei sazonalidade semanal forte e um pico atípico em dezembro; considere promoções no planejamento.</span></li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -58,35 +59,39 @@
 
 <section class="landing-section">
     <div class="container">
-        <div class="row text-center mb-4">
+        <div class="row text-center mb-5">
             <div class="col-lg-8 mx-auto">
-                <h2 class="fw-bold">Fluxo completo, da ingestão ao insight</h2>
-                <p class="text-muted mb-0">Interface reformulada com linguagem visual de dashboard profissional inspirada no SB Admin 2.</p>
+                <h2 class="fw-bold landing-section-title">Um pipeline completo, do dado bruto à decisão</h2>
+                <p class="text-muted mb-0">A IA interpreta e explica. Os números vêm de modelos estatísticos e de machine learning validados — nunca inventados.</p>
             </div>
         </div>
         <div class="row g-4">
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5><i class="fas fa-database text-primary me-2"></i>Datasets</h5>
-                        <p class="mb-0 text-muted">Upload, preview e mapeamento com experiência consistente em todas as páginas.</p>
-                    </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <span class="feature-icon ai"><i class="fas fa-wand-magic-sparkles"></i></span>
+                    <h5>Ingestão inteligente</h5>
+                    <p class="mb-0 text-muted small">O agente lê seu CSV/Excel, sugere o mapeamento de colunas e aponta problemas de qualidade antes de você treinar qualquer modelo.</p>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5><i class="fas fa-chart-line text-primary me-2"></i>Predições</h5>
-                        <p class="mb-0 text-muted">Execução de modelos com monitoramento de métricas e visão operacional clara.</p>
-                    </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-trophy"></i></span>
+                    <h5>Campeonato de modelos</h5>
+                    <p class="mb-0 text-muted small">Backtesting walk-forward compara ARIMA, ETS, Prophet, LSTM e gradient boosting contra baselines naive. Vence quem performa.</p>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5><i class="fas fa-cogs text-primary me-2"></i>Gestão</h5>
-                        <p class="mb-0 text-muted">Projetos, billing, perfil e configurações com componentes reutilizáveis e responsivos.</p>
-                    </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <span class="feature-icon ai"><i class="fas fa-comments"></i></span>
+                    <h5>Insights em português</h5>
+                    <p class="mb-0 text-muted small">Cada previsão vem com um relatório do agente: drivers, riscos e próximos passos ancorados nas métricas reais do modelo.</p>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-3">
+                <div class="feature-card">
+                    <span class="feature-icon"><i class="fas fa-shield-halved"></i></span>
+                    <h5>Métricas honestas</h5>
+                    <p class="mb-0 text-muted small">Intervalos de confiança, validação fora da amostra e alerta quando o modelo não supera o baseline. Sem números maquiados.</p>
                 </div>
             </div>
         </div>
@@ -95,20 +100,90 @@
 
 <section class="landing-section pt-0">
     <div class="container">
-        <div class="card border-0">
-            <div class="card-body p-4 p-lg-5">
-                <div class="row align-items-center g-4">
-                    <div class="col-lg-7">
-                        <h3 class="fw-bold mb-2">Ilustrações gratuitas do unDraw integradas ao tema</h3>
-                        <p class="text-muted mb-3">A proposta visual usa assets gratuitos do unDraw para reforçar contexto em telas de onboarding e marketing.</p>
-                        <a class="btn btn-primary" href="https://undraw.co/illustrations" target="_blank" rel="noopener noreferrer">Explorar coleção unDraw</a>
-                    </div>
-                    <div class="col-lg-5 text-center">
-                        <i class="fas fa-palette fa-4x text-primary mb-3"></i>
-                        <p class="mb-0">Base de ilustrações: <a href="https://undraw.co/illustrations" target="_blank" rel="noopener noreferrer">unDraw</a>.</p>
-                    </div>
+        <div class="row text-center mb-5">
+            <div class="col-lg-8 mx-auto">
+                <h2 class="fw-bold landing-section-title">Como funciona</h2>
+            </div>
+        </div>
+        <div class="row g-4 text-center">
+            <div class="col-md-4">
+                <span class="step-number">1</span>
+                <h5>Envie seus dados</h5>
+                <p class="text-muted small mb-0">Upload de CSV ou Excel. O agente detecta encoding, delimitador e tipos de coluna automaticamente.</p>
+            </div>
+            <div class="col-md-4">
+                <span class="step-number">2</span>
+                <h5>Ative o Modo Auto</h5>
+                <p class="text-muted small mb-0">O agente executa o campeonato de modelos e escolhe o algoritmo e os hiperparâmetros com melhor desempenho.</p>
+            </div>
+            <div class="col-md-4">
+                <span class="step-number">3</span>
+                <h5>Decida com contexto</h5>
+                <p class="text-muted small mb-0">Receba a previsão com intervalos de confiança e um relatório de insights pronto para compartilhar com o time.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="landing-section pt-0">
+    <div class="container">
+        <div class="row text-center mb-5">
+            <div class="col-lg-8 mx-auto">
+                <h2 class="fw-bold landing-section-title">Planos simples e transparentes</h2>
+                <p class="text-muted mb-0">Comece grátis e faça upgrade quando o volume crescer.</p>
+            </div>
+        </div>
+        <div class="row g-4 justify-content-center">
+            <div class="col-md-4">
+                <div class="pricing-card">
+                    <div class="fw-bold mb-2">Free</div>
+                    <div class="h3 mb-3">R$ 0<span class="small text-muted fw-normal">/mês</span></div>
+                    <ul>
+                        <li><i class="fas fa-check"></i>1 projeto e 2 datasets</li>
+                        <li><i class="fas fa-check"></i>5 previsões/mês</li>
+                        <li><i class="fas fa-check"></i>Modelos essenciais</li>
+                        <li><i class="fas fa-check"></i>Insights do agente de IA</li>
+                    </ul>
+                    <a href="{% url 'accounts:signup' %}" class="btn btn-outline-primary w-100">Criar conta grátis</a>
                 </div>
             </div>
+            <div class="col-md-4">
+                <div class="pricing-card featured">
+                    <span class="plan-tag">Mais popular</span>
+                    <div class="fw-bold mb-2">Pro</div>
+                    <div class="h3 mb-3">R$ 99<span class="small text-muted fw-normal">/mês</span></div>
+                    <ul>
+                        <li><i class="fas fa-check"></i>Projetos e datasets ilimitados</li>
+                        <li><i class="fas fa-check"></i>Modelos avançados (LSTM, boosting)</li>
+                        <li><i class="fas fa-check"></i>Backtesting e exportação</li>
+                        <li><i class="fas fa-check"></i>Prioridade alta na fila</li>
+                    </ul>
+                    <a href="{% url 'accounts:signup' %}" class="btn btn-primary w-100">Começar com Pro</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="pricing-card">
+                    <div class="fw-bold mb-2">Business</div>
+                    <div class="h3 mb-3">Sob consulta</div>
+                    <ul>
+                        <li><i class="fas fa-check"></i>SSO e RBAC avançado</li>
+                        <li><i class="fas fa-check"></i>Ambientes isolados</li>
+                        <li><i class="fas fa-check"></i>SLAs e suporte dedicado</li>
+                        <li><i class="fas fa-check"></i>Onboarding assistido</li>
+                    </ul>
+                    <a href="{% url 'accounts:signup' %}" class="btn btn-outline-primary w-100">Falar com vendas</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="landing-section pt-0">
+    <div class="container">
+        <div class="landing-cta text-center">
+            <h2 class="fw-bold mb-2">Pronto para prever com confiança?</h2>
+            <p class="mb-4" style="color: rgba(255,255,255,0.8);">Crie sua conta, envie um dataset e receba a primeira previsão explicada em minutos.</p>
+            <a href="{% url 'accounts:signup' %}" class="btn btn-light btn-lg fw-bold">Começar agora — é grátis</a>
         </div>
     </div>
 </section>

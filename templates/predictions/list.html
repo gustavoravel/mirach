@@ -3,16 +3,19 @@
 {% block title %}Previsões - Mirach{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h2 class="text-gradient"><i class="fas fa-chart-line me-2"></i> Minhas Previsões</h2>
-  <a href="{% url 'predictions:create' %}" class="btn btn-primary"><i class="fas fa-plus me-1"></i> Nova Previsão</a>
+<div class="page-header">
+  <div>
+    <h2><i class="fas fa-chart-line me-2 text-primary"></i>Minhas Previsões</h2>
+    <p class="subtitle">Acompanhe execuções, métricas e insights gerados pelo agente.</p>
   </div>
+  <a href="{% url 'predictions:wizard' %}" class="btn btn-primary"><i class="fas fa-wand-magic-sparkles me-1"></i> Nova Previsão</a>
+</div>
 
 {% if predictions %}
 <div class="row g-3">
   {% for p in predictions %}
   <div class="col-md-6 col-lg-4">
-    <div class="card h-100">
+    <div class="card h-100 hover-lift">
       <div class="card-header d-flex justify-content-between align-items-center">
         <span class="fw-semibold">{{ p.name }}</span>
         <span class="badge bg-{% if p.status == 'completed' %}success{% elif p.status == 'training' or p.status == 'queued' %}warning{% elif p.status == 'failed' %}danger{% else %}secondary{% endif %}">{{ p.get_status_display }}</span>
@@ -23,27 +26,25 @@
         <div class="small text-muted"><i class="fas fa-robot me-1"></i>{{ p.prediction_model.name }}</div>
       </div>
       <div class="card-footer d-flex gap-2">
-        <a href="{% url 'predictions:detail' p.pk %}" class="btn btn-outline-primary btn-sm"><i class="fas fa-eye"></i></a>
+        <a href="{% url 'predictions:detail' p.pk %}" class="btn btn-outline-primary btn-sm flex-fill"><i class="fas fa-eye me-1"></i>Detalhes</a>
         {% if p.status == 'pending' or p.status == 'failed' %}
         <form method="post" action="{% url 'predictions:run' p.pk %}">
           {% csrf_token %}
-          <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-play"></i></button>
+          <button class="btn btn-primary btn-sm" type="submit" title="Executar"><i class="fas fa-play"></i></button>
         </form>
         {% endif %}
-        <a href="{% url 'predictions:delete' p.pk %}" class="btn btn-outline-danger btn-sm"><i class="fas fa-trash"></i></a>
+        <a href="{% url 'predictions:delete' p.pk %}" class="btn btn-outline-danger btn-sm" title="Excluir"><i class="fas fa-trash"></i></a>
       </div>
     </div>
   </div>
   {% endfor %}
+</div>
 {% else %}
-<div class="text-center py-5">
-  <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
-  <h4 class="text-muted">Nenhuma previsão encontrada</h4>
-  <p class="text-muted">Crie a sua primeira previsão para ver os resultados aqui.</p>
-  <a href="{% url 'predictions:create' %}" class="btn btn-primary"><i class="fas fa-plus me-1"></i> Nova Previsão</a>
+<div class="empty-state">
+  <span class="empty-icon"><i class="fas fa-chart-line"></i></span>
+  <h4>Nenhuma previsão ainda</h4>
+  <p>Use o assistente com Modo Auto: o agente compara os modelos no seu dataset e escolhe o melhor para você.</p>
+  <a href="{% url 'predictions:wizard' %}" class="btn btn-primary"><i class="fas fa-wand-magic-sparkles me-1"></i> Criar primeira previsão</a>
 </div>
 {% endif %}
-
 {% endblock %}
-
-
