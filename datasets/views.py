@@ -215,16 +215,18 @@ def column_mapping(request, pk):
         return redirect('datasets:list')
     
     if request.method == 'POST':
-        # Process column mappings
-        for key, value in request.POST.items():
-            if key.startswith('column_type_'):
-                column_name = key.replace('column_type_', '')
-                mapping, created = ColumnMapping.objects.get_or_create(
-                    dataset=dataset,
-                    column_name=column_name
-                )
-                mapping.column_type = value
-                mapping.save()
+        # Process column mappings for every known column
+        for col_name in (dataset.column_names or []):
+            key = f'column_type_{col_name}'
+            value = request.POST.get(key)
+            if not value:
+                continue
+            mapping, _created = ColumnMapping.objects.get_or_create(
+                dataset=dataset,
+                column_name=col_name,
+            )
+            mapping.column_type = value
+            mapping.save()
         
         messages.success(request, 'Mapeamento de colunas salvo com sucesso!')
         return redirect('datasets:detail', pk=dataset.pk)
@@ -238,19 +240,49 @@ def column_mapping(request, pk):
             if ai_suggestion:
                 dataset.ai_interpretation = ai_suggestion
                 dataset.save(update_fields=['ai_interpretation'])
-                # Pre-fill ColumnMapping if empty
-                if not dataset.column_mappings.exists():
-                    _apply_ai_mappings(dataset, ai_suggestion)
+        # Always merge AI / heuristic suggestions for missing columns
+        if ai_suggestion:
+            _apply_ai_mappings(dataset, ai_suggestion, only_missing=True)
     except Exception:
         pass
+
+    # Ensure every column has a mapping row (template-safe)
+    _ensure_all_column_mappings(dataset)
+
+    mapping_by_column = {
+        m.column_name: m.column_type
+        for m in dataset.column_mappings.all()
+    }
+    columns_with_types = [
+        {'name': col, 'type': mapping_by_column.get(col, 'ignore')}
+        for col in (dataset.column_names or [])
+    ]
     
     return render(request, 'datasets/mapping.html', {
         'dataset': dataset,
         'ai_interpretation': ai_suggestion,
+        'columns_with_types': columns_with_types,
     })
 
 
-def _apply_ai_mappings(dataset, interpretation: dict):
+def _ensure_all_column_mappings(dataset):
+    """Create ignore mappings for any column missing a ColumnMapping row."""
+    existing = set(dataset.column_mappings.values_list('column_name', flat=True))
+    for col in dataset.column_names or []:
+        if col not in existing:
+            # Name-based default for date-like columns
+            col_l = str(col).lower()
+            default = 'timestamp' if any(
+                h in col_l for h in ('date', 'time', 'timestamp', 'data', 'datetime')
+            ) else 'ignore'
+            ColumnMapping.objects.create(
+                dataset=dataset,
+                column_name=col,
+                column_type=default,
+            )
+
+
+def _apply_ai_mappings(dataset, interpretation: dict, only_missing: bool = False):
     """Create ColumnMapping rows from DatasetInterpretation dict."""
     mapping_plan = {}
     ts = interpretation.get('timestamp_column')
@@ -268,7 +300,19 @@ def _apply_ai_mappings(dataset, interpretation: dict):
         ctype = sug.get('column_type') if isinstance(sug, dict) else getattr(sug, 'column_type', None)
         if name and ctype and name not in mapping_plan:
             mapping_plan[name] = ctype
+
+    existing = {
+        m.column_name: m
+        for m in dataset.column_mappings.all()
+    }
     for col_name, col_type in mapping_plan.items():
+        if only_missing and col_name in existing:
+            # Still upgrade missing Date-like columns stuck as ignore / absent
+            current = existing[col_name].column_type
+            if col_type == 'timestamp' and current in ('ignore', ''):
+                existing[col_name].column_type = 'timestamp'
+                existing[col_name].save(update_fields=['column_type'])
+            continue
         ColumnMapping.objects.update_or_create(
             dataset=dataset,
             column_name=col_name,

@@ -62,7 +62,8 @@ def suggest_column_mappings(dataset) -> Optional[Dict[str, Any]]:
             if ext in ['.xlsx', '.xls'] or (dataset.file.name or '').lower().endswith(('.xlsx', '.xls')):
                 df = pd.read_excel(fh)
             else:
-                df = pd.read_csv(fh, sep=None, engine='python', low_memory=False)
+                from datasets.utils import _read_csv_bytes
+                df, _ = _read_csv_bytes(fh.read())
     except Exception as exc:
         logger.warning("IngestAgent could not read dataset %s: %s", dataset.pk, exc)
         return None

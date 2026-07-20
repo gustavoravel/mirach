@@ -5,6 +5,20 @@
 {% block content %}
 <h2 class="mb-3"><i class="fas fa-cogs"></i> Mapeamento de Colunas</h2>
 
+{% if ai_interpretation.inferred_domain or ai_interpretation.timestamp_column %}
+<div class="alert alert-info">
+  {% if ai_interpretation.inferred_domain %}
+  <div><strong>Domínio sugerido:</strong> {{ ai_interpretation.inferred_domain }}</div>
+  {% endif %}
+  {% if ai_interpretation.timestamp_column %}
+  <div><strong>Timestamp sugerido:</strong> {{ ai_interpretation.timestamp_column }}</div>
+  {% endif %}
+  {% if ai_interpretation.target_column %}
+  <div><strong>Alvo sugerido:</strong> {{ ai_interpretation.target_column }}</div>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
     <strong>{{ dataset.name }}</strong>
@@ -22,26 +36,21 @@
             </tr>
           </thead>
           <tbody>
-            {% for col in dataset.column_names %}
+            {% for item in columns_with_types %}
             <tr>
-              <td><code>{{ col }}</code></td>
+              <td><code>{{ item.name }}</code></td>
               <td style="max-width:260px;">
-                <select name="column_type_{{ col }}" class="form-select form-select-sm">
-                  {% for mapping in dataset.column_mappings.all %}
-                    {% if mapping.column_name == col %}
-                      <option value="ignore" {% if mapping.column_type == 'ignore' %}selected{% endif %}>Ignorar</option>
-                      <option value="timestamp" {% if mapping.column_type == 'timestamp' %}selected{% endif %}>Timestamp/Data</option>
-                      <option value="target" {% if mapping.column_type == 'target' %}selected{% endif %}>Variável Alvo</option>
-                      <option value="feature" {% if mapping.column_type == 'feature' %}selected{% endif %}>Variável Explicativa</option>
-                    {% endif %}
-                  {% empty %}
-                    <option value="ignore">Ignorar</option>
-                    <option value="timestamp">Timestamp/Data</option>
-                    <option value="target">Variável Alvo</option>
-                    <option value="feature">Variável Explicativa</option>
-                  {% endfor %}
+                <select name="column_type_{{ item.name }}" class="form-select form-select-sm" required>
+                  <option value="ignore" {% if item.type == 'ignore' %}selected{% endif %}>Ignorar</option>
+                  <option value="timestamp" {% if item.type == 'timestamp' %}selected{% endif %}>Timestamp/Data</option>
+                  <option value="target" {% if item.type == 'target' %}selected{% endif %}>Variável Alvo</option>
+                  <option value="feature" {% if item.type == 'feature' %}selected{% endif %}>Variável Explicativa</option>
                 </select>
               </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="2" class="text-muted">Nenhuma coluna encontrada neste dataset.</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -56,5 +65,3 @@
 </div>
 
 {% endblock %}
-
-

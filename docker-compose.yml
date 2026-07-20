@@ -1,7 +1,7 @@
 services:
   web:
     build: .
-    command: /bin/sh -c "python -m pip install --upgrade pip && python manage.py migrate --noinput && python manage.py seed_plans || true && python manage.py init_models || true && python manage.py runserver 0.0.0.0:8000"
+    command: /bin/sh -c "python -m pip install --upgrade pip && python manage.py migrate --noinput && python manage.py ensure_storage_bucket || true && python manage.py seed_plans || true && python manage.py init_models || true && python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:

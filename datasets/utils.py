@@ -2,7 +2,58 @@ import pandas as pd
 import numpy as np
 from django.core.files.uploadedfile import UploadedFile
 import os
-from typing import Dict, List, Tuple, Optional
+import io
+import csv
+from typing import Dict, List, Tuple, Optional, Union
+
+
+def _read_csv_bytes(raw: bytes) -> Tuple[pd.DataFrame, Dict]:
+    """
+    Decode CSV bytes and parse with delimiter sniffing.
+    Avoids passing binary file handles to engine='python' (TypeError:
+    cannot use a string pattern on a bytes-like object).
+    """
+    if isinstance(raw, str):
+        raw = raw.encode('utf-8')
+
+    encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+    last_err: Optional[Exception] = None
+    detected = {'encoding': None, 'delimiter': None}
+
+    for enc in encodings:
+        try:
+            text = raw.decode(enc)
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+
+        sample = text[:16384]
+        delimiter = ','
+        try:
+            dialect = csv.Sniffer().sniff(sample, delimiters=',;\t|')
+            delimiter = dialect.delimiter
+        except csv.Error:
+            counts = {d: sample.count(d) for d in [',', ';', '\t', '|']}
+            delimiter = max(counts, key=counts.get) if any(counts.values()) else ','
+
+        try:
+            df = pd.read_csv(io.StringIO(text), sep=delimiter)
+            detected['encoding'] = enc
+            detected['delimiter'] = delimiter
+            return df, detected
+        except Exception as e:
+            last_err = e
+            try:
+                # Fallback: let pandas sniff on already-decoded text
+                df = pd.read_csv(io.StringIO(text), sep=None, engine='python')
+                detected['encoding'] = enc
+                detected['delimiter'] = delimiter
+                return df, detected
+            except Exception as e2:
+                last_err = e2
+                continue
+
+    raise last_err or ValueError('Falha ao ler CSV com encodings comuns')
 
 
 def process_file(file: UploadedFile) -> Dict:
@@ -14,24 +65,14 @@ def process_file(file: UploadedFile) -> Dict:
         detected = {'encoding': None, 'delimiter': None}
         # Ler arquivo conforme extensão
         if ext in ['.xlsx', '.xls']:
+            file.seek(0)
             df = pd.read_excel(file)
-        elif ext == '.csv':
-            # Tentar detecção simples de encoding e delimitador
-            encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252']
-            last_err = None
-            for enc in encodings:
-                try:
-                    file.seek(0)
-                    df = pd.read_csv(file, sep=None, engine='python', encoding=enc, low_memory=False)
-                    detected['encoding'] = enc
-                    # Tentar inferir separador do primeiro row/columns length
-                    detected['delimiter'] = getattr(df, 'attrs', {}).get('delimiter', None)
-                    break
-                except Exception as e:
-                    last_err = e
-                    continue
-            else:
-                raise last_err or ValueError('Falha ao ler CSV com encodings comuns')
+        elif ext in ['.csv', '.txt', '.tsv']:
+            file.seek(0)
+            raw = file.read()
+            df, detected = _read_csv_bytes(raw)
+            if ext == '.tsv' and not detected.get('delimiter'):
+                detected['delimiter'] = '\t'
         else:
             raise ValueError(f"Formato não suportado: {ext}")
         
@@ -48,7 +89,7 @@ def process_file(file: UploadedFile) -> Dict:
                 try:
                     pd.to_datetime(df[col], errors='raise')
                     column_types[col] = 'datetime'
-                except:
+                except Exception:
                     column_types[col] = 'text'
             elif df[col].dtype in ['int64', 'int32']:
                 column_types[col] = 'integer'
@@ -97,27 +138,59 @@ def detect_time_series_columns(df: pd.DataFrame) -> Dict[str, str]:
     Detecta automaticamente colunas de timestamp e variável alvo
     """
     suggestions = {}
-    
+    time_name_hints = (
+        'date', 'time', 'timestamp', 'datetime', 'ds', 'periodo', 'período',
+        'data', 'semana', 'month', 'ano', 'year', 'dia', 'day',
+    )
+
     for col in df.columns:
-        # Detectar colunas de timestamp
-        if df[col].dtype == 'object':
-            try:
-                pd.to_datetime(df[col], errors='raise')
-                suggestions[col] = 'timestamp'
-            except:
-                pass
-        
-        # Detectar colunas numéricas como possíveis variáveis alvo
-        elif df[col].dtype in ['int64', 'int32', 'float64', 'float32']:
-            # Se tem poucos valores únicos, pode ser categórico
-            unique_ratio = df[col].nunique() / len(df)
-            if unique_ratio > 0.1:  # Mais de 10% de valores únicos
-                suggestions[col] = 'target'
+        col_str = str(col)
+        col_l = col_str.lower().strip()
+        series = df[col]
+        dtype = series.dtype
+
+        # Already datetime-like
+        if pd.api.types.is_datetime64_any_dtype(dtype):
+            suggestions[col_str] = 'timestamp'
+            continue
+
+        # Object/string that parses as datetime
+        if dtype == object or str(dtype).startswith('string'):
+            parsed = pd.to_datetime(series, errors='coerce', dayfirst=True)
+            parse_ratio = float(parsed.notna().mean()) if len(series) else 0.0
+            if parse_ratio >= 0.8 or any(h in col_l for h in time_name_hints):
+                if parse_ratio >= 0.5 or any(h in col_l for h in time_name_hints):
+                    suggestions[col_str] = 'timestamp'
+                    continue
+
+        # Numeric columns
+        if pd.api.types.is_numeric_dtype(dtype):
+            # Name hint for date-like numeric (yyyymmdd) is rare; treat as target/feature
+            unique_ratio = series.nunique(dropna=True) / max(len(series), 1)
+            if unique_ratio > 0.1:
+                suggestions[col_str] = 'target'
             else:
-                suggestions[col] = 'feature'
+                suggestions[col_str] = 'feature'
+            continue
+
+        # Fallback by name
+        if any(h in col_l for h in time_name_hints):
+            suggestions[col_str] = 'timestamp'
         else:
-            suggestions[col] = 'ignore'
-    
+            suggestions[col_str] = 'ignore'
+
+    # Ensure at most one primary target: prefer name hints like sales/y/value
+    target_hints = ('sales', 'venda', 'target', 'y', 'value', 'valor', 'qty', 'demand', 'receita')
+    targets = [c for c, t in suggestions.items() if t == 'target']
+    if len(targets) > 1:
+        preferred = next(
+            (c for c in targets if any(h in c.lower() for h in target_hints)),
+            targets[0],
+        )
+        for c in targets:
+            if c != preferred:
+                suggestions[c] = 'feature'
+
     return suggestions
 
 
@@ -327,7 +400,7 @@ def process_dataset_pipeline(dataset, timestamp_col: str = None, target_col: str
             if ext in ['.xlsx', '.xls']:
                 df = pd.read_excel(fh)
             elif ext == '.csv':
-                df = pd.read_csv(fh, sep=None, engine='python', low_memory=False)
+                df, _ = _read_csv_bytes(fh.read())
             else:
                 return {'success': False, 'error': f'Unsupported type: {ext}'}
 
