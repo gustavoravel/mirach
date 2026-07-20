@@ -33,12 +33,28 @@ try:
 except ImportError:
     TENSORFLOW_AVAILABLE = False
 
-# Prophet (if available)
+# Prophet (if available — also verify Stan/CmdStan backend loads)
+PROPHET_UNAVAILABLE_REASON = ''
 try:
     from prophet import Prophet
-    PROPHET_AVAILABLE = True
-except ImportError:
+
+    try:
+        _probe = Prophet()
+        if not hasattr(_probe, 'stan_backend') or _probe.stan_backend is None:
+            raise RuntimeError(
+                "Prophet Stan backend missing (incomplete CmdStan). "
+                "Rebuild the Docker image or run: "
+                "python -c \"import cmdstanpy; cmdstanpy.install_cmdstan(version='2.33.1')\""
+            )
+        PROPHET_AVAILABLE = True
+    except Exception as _prophet_backend_err:
+        Prophet = None  # type: ignore
+        PROPHET_AVAILABLE = False
+        PROPHET_UNAVAILABLE_REASON = str(_prophet_backend_err)
+except ImportError as _prophet_import_err:
+    Prophet = None  # type: ignore
     PROPHET_AVAILABLE = False
+    PROPHET_UNAVAILABLE_REASON = str(_prophet_import_err)
 
 # XGBoost (if available)
 try:
@@ -316,8 +332,9 @@ class ProphetForecaster(BaseForecaster):
     """Facebook Prophet model (supports optional exogenous regressors)."""
     
     def __init__(self, **kwargs):
-        if not PROPHET_AVAILABLE:
-            raise ImportError("Prophet is not available. Install with: pip install prophet")
+        if not PROPHET_AVAILABLE or Prophet is None:
+            detail = PROPHET_UNAVAILABLE_REASON or 'Install with: pip install prophet'
+            raise ImportError(f"Prophet is not available. {detail}")
         super().__init__("Prophet")
         # Strip non-Prophet keys that may arrive from UI/championship
         self._exog_cols: List[str] = []
