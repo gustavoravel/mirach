@@ -19,6 +19,7 @@ from datasets.models import Dataset
 from projects.models import ProjectMembership
 from .algorithms import create_forecaster
 import numpy as np
+import pandas as pd
 from django.urls import reverse
 from django.views.decorators.cache import cache_page
 from accounts.models import Subscription, Plan, UsageEvent
@@ -179,7 +180,7 @@ def prediction_run(request, pk):
         est_minutes = max(1, int(prediction.dataset.total_rows or 1000) // 5000)
         prediction.estimated_completion = datetime.now() + timedelta(minutes=est_minutes)
         prediction.save()
-        queue_name = 'predictions_high' if getattr(prediction.project, 'priority', 'low') == 'high' else 'predictions_default'
+        queue_name = 'predictions_high' if getattr(prediction.project, 'priority', 0) >= 1 else 'predictions_default'
         run_prediction_task.apply_async(args=[prediction.id], queue=queue_name)
         from projects.models import AuditLog
         AuditLog.objects.create(project=prediction.project, user=request.user, action='prediction_run', context={'prediction_id': prediction.id})
@@ -242,7 +243,50 @@ def prediction_wizard(request):
             request.session[session_key] = state
             return redirect(f"{request.path}?step=2")
         elif step == 2:
+            auto_mode = request.POST.get('auto_mode') == '1'
+            if auto_mode:
+                dataset_id = state.get('dataset')
+                try:
+                    from .llm.orchestrator_agent import plan_model
+                    plan = plan_model(int(dataset_id))
+                    algo = plan.get('algorithm') or 'arima'
+                    # Map algo name to PredictionModel
+                    model_obj = PredictionModel.objects.filter(
+                        is_active=True, algorithm_type=algo
+                    ).first()
+                    if not model_obj:
+                        # Fallback aliases
+                        aliases = {
+                            'ridge': 'ridge',
+                            'lasso': 'lasso',
+                            'linear_regression': 'linear_regression',
+                        }
+                        model_obj = PredictionModel.objects.filter(
+                            is_active=True, algorithm_type=aliases.get(algo, 'arima')
+                        ).first()
+                    if not model_obj:
+                        messages.error(request, 'Nenhum modelo disponível para o plano Auto.')
+                        return redirect(f"{request.path}?step=2")
+                    state['model'] = model_obj.id
+                    state['auto_plan'] = {
+                        'algorithm': algo,
+                        'parameters': plan.get('parameters') or {},
+                        'rationale': plan.get('rationale') or '',
+                        'beats_baseline': plan.get('beats_baseline'),
+                        'championship': plan.get('_championship'),
+                    }
+                    request.session[session_key] = state
+                    messages.info(
+                        request,
+                        f"Modo Auto selecionou {model_obj.name}"
+                        + (f": {plan.get('rationale')}" if plan.get('rationale') else ''),
+                    )
+                    return redirect(f"{request.path}?step=3")
+                except Exception as exc:
+                    messages.error(request, f'Falha no modo Auto: {exc}')
+                    return redirect(f"{request.path}?step=2")
             state['model'] = int(request.POST.get('model'))
+            state.pop('auto_plan', None)
             request.session[session_key] = state
             return redirect(f"{request.path}?step=3")
         elif step == 3:
@@ -257,6 +301,10 @@ def prediction_wizard(request):
             dataset = get_object_or_404(Dataset, pk=state['dataset'], project__owner=request.user)
             model = get_object_or_404(PredictionModel, pk=state['model'])
             model_parameters = model.parameters.copy()
+            # Apply Auto plan parameters first
+            auto_plan = state.get('auto_plan') or {}
+            if auto_plan.get('parameters'):
+                model_parameters.update(auto_plan['parameters'])
             if params_json:
                 try:
                     overrides = json.loads(params_json)
@@ -274,8 +322,24 @@ def prediction_wizard(request):
                 validation_size=validation_size,
                 test_size=1.0 - train_size - validation_size,
                 model_parameters=model_parameters,
-                created_by=request.user
+                created_by=request.user,
+                explainability={
+                    'auto_plan': {
+                        'rationale': auto_plan.get('rationale'),
+                        'beats_baseline': auto_plan.get('beats_baseline'),
+                    }
+                } if auto_plan else {},
             )
+            # Store championship summary for narrative
+            if auto_plan.get('championship'):
+                expl = dict(prediction.explainability or {})
+                expl['beats_baseline'] = auto_plan.get('beats_baseline')
+                expl['championship'] = {
+                    'best_model': auto_plan.get('algorithm'),
+                    'beats_baseline': auto_plan.get('beats_baseline'),
+                }
+                prediction.explainability = expl
+                prediction.save(update_fields=['explainability'])
             request.session.pop(session_key, None)
             messages.success(request, 'Previsão criada! Agora execute para gerar os resultados.')
             return redirect('predictions:detail', pk=prediction.pk)
@@ -330,6 +394,25 @@ def get_model_recommendations(request, dataset_id):
         service = PredictionService()
         result = service.get_model_recommendations(dataset)
         return JsonResponse(result)
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def api_auto_plan(request, dataset_id):
+    """Run OrchestratorAgent / championship and return ModelPlan JSON."""
+    try:
+        dataset = get_object_or_404(Dataset, pk=dataset_id)
+        if not ProjectMembership.objects.filter(project=dataset.project, user=request.user).exists():
+            return JsonResponse({'success': False, 'error': 'Acesso negado'})
+        async_mode = request.GET.get('async') == '1'
+        if async_mode:
+            from .tasks import run_auto_model_plan_task
+            async_result = run_auto_model_plan_task.delay(dataset_id)
+            return JsonResponse({'success': True, 'task_id': async_result.id})
+        from .llm.orchestrator_agent import plan_model
+        plan = plan_model(dataset_id)
+        return JsonResponse({'success': True, 'plan': plan})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
@@ -660,11 +743,12 @@ def prediction_explore_interactive(request, pk):
             timestamp_col = timestamp_mapping.column_name if timestamp_mapping else None
             
             if target_col and timestamp_col:
-                # Read dataset file
-                if dataset.file.path.endswith('.xlsx'):
-                    df = pd.read_excel(dataset.file.path)
-                else:
-                    df = pd.read_csv(dataset.file.path)
+                # Read dataset file (supports remote storage)
+                with dataset.file.open('rb') as fh:
+                    if dataset.file.name.lower().endswith(('.xlsx', '.xls')):
+                        df = pd.read_excel(fh)
+                    else:
+                        df = pd.read_csv(fh, low_memory=False)
                 
                 # Prepare historical data
                 df[timestamp_col] = pd.to_datetime(df[timestamp_col])

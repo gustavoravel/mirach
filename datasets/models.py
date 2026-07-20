@@ -37,6 +37,8 @@ class Dataset(models.Model):
     total_rows = models.IntegerField(null=True, blank=True, verbose_name="Total de Linhas")
     total_columns = models.IntegerField(null=True, blank=True, verbose_name="Total de Colunas")
     column_names = models.JSONField(default=list, blank=True, verbose_name="Nomes das Colunas")
+    data_profile = models.JSONField(default=dict, blank=True, verbose_name="Perfil dos Dados")
+    ai_interpretation = models.JSONField(default=dict, blank=True, verbose_name="Interpretação IA")
     
     class Meta:
         verbose_name = "Dataset"

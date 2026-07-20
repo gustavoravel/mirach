@@ -39,9 +39,16 @@
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="step" value="2" />
-    <div class="mb-3">
+    <div class="mb-3 form-check">
+      <input class="form-check-input" type="checkbox" value="1" id="autoMode" name="auto_mode">
+      <label class="form-check-label" for="autoMode">
+        Modo Auto (campeonato empírico + IA Nemotron)
+      </label>
+      <div class="form-text">Seleciona o algoritmo com melhor RMSE no walk-forward e opcionalmente usa NVIDIA NIM para refinar o plano.</div>
+    </div>
+    <div class="mb-3" id="manualModelBlock">
       <label class="form-label">Modelo</label>
-      <select name="model" class="form-select" required>
+      <select name="model" class="form-select" id="modelSelect">
         <option value="" disabled selected>Selecione</option>
         {% for m in models %}
           <option value="{{ m.id }}" {% if state.model == m.id %}selected{% endif %}>{{ m.name }}</option>
@@ -54,10 +61,37 @@
     <a class="btn btn-outline-secondary" href="?step=1">Voltar</a>
     <button class="btn btn-primary" type="submit">Continuar</button>
   </form>
+  <script>
+    (function(){
+      const auto = document.getElementById('autoMode');
+      const block = document.getElementById('manualModelBlock');
+      const sel = document.getElementById('modelSelect');
+      function sync(){
+        if(!auto || !block || !sel) return;
+        if(auto.checked){
+          block.style.opacity = '0.5';
+          sel.removeAttribute('required');
+          sel.disabled = true;
+        } else {
+          block.style.opacity = '1';
+          sel.disabled = false;
+          sel.setAttribute('required', 'required');
+        }
+      }
+      if(auto){ auto.addEventListener('change', sync); sync(); }
+    })();
+  </script>
   {% elif step == 3 %}
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="step" value="3" />
+    {% if state.auto_plan %}
+    <div class="alert alert-success">
+      <strong>Plano Auto:</strong> {{ state.auto_plan.algorithm }}
+      {% if state.auto_plan.rationale %}<br><small>{{ state.auto_plan.rationale }}</small>{% endif %}
+      {% if state.auto_plan.beats_baseline == False %}<br><small class="text-warning">Atenção: não superou o baseline naive.</small>{% endif %}
+    </div>
+    {% endif %}
     <div class="row">
       <div class="col-md-6 mb-3">
         <label class="form-label">Nome</label>

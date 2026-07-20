@@ -35,8 +35,8 @@ class PredictionService:
             'xgboost': 'XGBoost'
         }
     
-    def prepare_data(self, dataset: Dataset) -> Tuple[pd.Series, List[str]]:
-        """Prepare data from dataset for forecasting"""
+    def prepare_data(self, dataset: Dataset) -> Tuple[pd.Series, Optional[pd.DataFrame]]:
+        """Prepare target series and optional exogenous feature frame."""
         try:
             # Read the dataset file (supports remote storage)
             ext = (dataset.file_type or '').lower() or os.path.splitext(dataset.file.name)[1].lower()
@@ -55,6 +55,9 @@ class PredictionService:
             timestamp_col = None
             target_col = None
             feature_cols = []
+            dayfirst = True
+            if getattr(dataset, 'data_profile', None) and isinstance(dataset.data_profile, dict):
+                dayfirst = dataset.data_profile.get('dayfirst', True)
             
             for mapping in mappings:
                 if mapping.column_type == 'timestamp':
@@ -67,29 +70,47 @@ class PredictionService:
             if not timestamp_col or not target_col:
                 raise ValueError("Timestamp and target columns must be mapped")
             
-            # Convert timestamp column
-            df[timestamp_col] = pd.to_datetime(df[timestamp_col], errors='coerce')
+            # Convert timestamp column (prefer BR dayfirst when indicated)
+            df[timestamp_col] = pd.to_datetime(
+                df[timestamp_col], errors='coerce', dayfirst=bool(dayfirst)
+            )
+            df = df.dropna(subset=[timestamp_col])
             df = df.set_index(timestamp_col)
             
-            # Sort by timestamp
+            # Sort by timestamp and drop duplicate index
             df = df.sort_index()
+            df = df[~df.index.duplicated(keep='first')]
             
             # Get target series
-            # Coerce target to numeric to avoid string comparison errors in models
             df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
             target_series = df[target_col].dropna()
+            if target_series.name is None:
+                target_series = target_series.rename(target_col)
             
             if len(target_series) == 0:
                 raise ValueError(f"Target column '{target_col}' has no valid numeric data after conversion")
+
+            exog_df = None
+            if feature_cols:
+                present = [c for c in feature_cols if c in df.columns]
+                if present:
+                    exog_df = df.loc[target_series.index, present].apply(pd.to_numeric, errors='coerce')
+                    exog_df = exog_df.ffill().bfill()
+                    # Drop all-null columns
+                    exog_df = exog_df.dropna(axis=1, how='all')
+                    if exog_df.shape[1] == 0:
+                        exog_df = None
             
-            return target_series, feature_cols
+            return target_series, exog_df
             
         except Exception as e:
             raise ValueError(f"Data preparation failed: {str(e)}")
     
     def split_data(self, data: pd.Series, train_size: float = 0.8, 
-                   validation_size: float = 0.1) -> Tuple[pd.Series, pd.Series, pd.Series]:
-        """Split data into train, validation, and test sets"""
+                   validation_size: float = 0.1,
+                   exog: Optional[pd.DataFrame] = None
+                   ) -> Tuple[pd.Series, pd.Series, pd.Series, Optional[pd.DataFrame], Optional[pd.DataFrame], Optional[pd.DataFrame]]:
+        """Split data (and optional exog) into train, validation, and test sets"""
         n = len(data)
         train_end = int(n * train_size)
         val_end = int(n * (train_size + validation_size))
@@ -97,8 +118,14 @@ class PredictionService:
         train_data = data[:train_end]
         val_data = data[train_end:val_end]
         test_data = data[val_end:]
+
+        train_exog = val_exog = test_exog = None
+        if exog is not None:
+            train_exog = exog.iloc[:train_end]
+            val_exog = exog.iloc[train_end:val_end]
+            test_exog = exog.iloc[val_end:]
         
-        return train_data, val_data, test_data
+        return train_data, val_data, test_data, train_exog, val_exog, test_exog
     
     def run_prediction(self, prediction: Prediction) -> Dict[str, Any]:
         """Run prediction using the specified model"""
@@ -108,19 +135,23 @@ class PredictionService:
             prediction.save()
             
             # Prepare data
-            target_series, feature_cols = self.prepare_data(prediction.dataset)
+            target_series, exog_df = self.prepare_data(prediction.dataset)
             
             # Split data
-            train_data, val_data, test_data = self.split_data(
+            train_data, val_data, test_data, train_exog, val_exog, test_exog = self.split_data(
                 target_series, 
                 prediction.train_size, 
-                prediction.validation_size
+                prediction.validation_size,
+                exog=exog_df,
             )
             
             # Create forecaster
+            params = dict(prediction.model_parameters or {})
+            # frequency is not a model ctor arg
+            frequency = params.pop('frequency', None)
             forecaster = create_forecaster(
                 prediction.prediction_model.algorithm_type,
-                **prediction.model_parameters
+                **params
             )
 
             # Validate minimum samples for ML models (lags/rolling drop initial rows)
@@ -129,48 +160,85 @@ class PredictionService:
                 if len(train_data) < 15:
                     raise ValueError("Insufficient training samples for ML model. Provide at least ~15-20 points.")
             
-            # Fit model
-            fit_results = forecaster.fit(train_data)
+            # Fit model (ETS ignores exog by design)
+            algo = prediction.prediction_model.algorithm_type
+            fit_kwargs = {}
+            if algo != 'ets' and train_exog is not None:
+                fit_kwargs['exog'] = train_exog
+            fit_results = forecaster.fit(train_data, **fit_kwargs)
             
             # Make predictions
-            predictions = forecaster.predict(prediction.prediction_horizon)
+            pred_kwargs = {}
+            if algo != 'ets' and exog_df is not None:
+                # No future exog available — models hold last values
+                pred_kwargs['exog'] = None
+            predictions = forecaster.predict(prediction.prediction_horizon, **pred_kwargs)
             
             # Evaluate on validation set if available
+            metrics = None
             if len(val_data) > 0:
-                val_predictions = forecaster.predict(len(val_data))
+                val_pred_kwargs = {}
+                if algo != 'ets' and val_exog is not None:
+                    val_pred_kwargs['exog'] = val_exog
+                # Re-fit on train only already done; predict val horizon
+                val_predictions = forecaster.predict(len(val_data), **val_pred_kwargs)
                 metrics = forecaster.evaluate(val_data, val_predictions)
-            else:
-                # Quick naive baseline for metrics when no val set
-                metrics = {'rmse': 0.0, 'mae': 0.0, 'mape': 0.0, 'r2': 0.0}
+            # Honest metrics: omit (null) when no validation set — never fake zeros
             
-            # Explainability placeholder (depends on model)
+            # Explainability from fit_results / forecaster attributes
             explanation = {}
             try:
-                if hasattr(forecaster, 'feature_importances_'):
-                    explanation['feature_importances'] = getattr(forecaster, 'feature_importances_', None)
+                fi = getattr(forecaster, 'feature_importances_', None)
+                if not fi and isinstance(fit_results, dict):
+                    fi = fit_results.get('feature_importance')
+                if fi:
+                    # Keep top 15 for payload size
+                    if isinstance(fi, dict):
+                        ranked = sorted(fi.items(), key=lambda x: abs(float(x[1])), reverse=True)[:15]
+                        explanation['feature_importances'] = {k: float(v) for k, v in ranked}
                 if hasattr(forecaster, 'coef_'):
                     explanation['coefficients'] = getattr(forecaster, 'coef_', None)
             except Exception:
                 pass
 
             # Sanitize metrics (replace NaN/Inf with None for JSON)
-            metrics = self._sanitize_json(metrics)
+            metrics = self._sanitize_json(metrics) if metrics is not None else None
+
+            # Prediction intervals
+            lower = upper = None
+            try:
+                if hasattr(forecaster, 'get_prediction_intervals'):
+                    import inspect as _insp
+                    sig = _insp.signature(forecaster.get_prediction_intervals)
+                    if 'predictions' in sig.parameters:
+                        intervals = forecaster.get_prediction_intervals(predictions)
+                    else:
+                        intervals = forecaster.get_prediction_intervals()
+                    if intervals is not None:
+                        lower, upper = intervals
+            except Exception:
+                lower = upper = None
 
             # Create prediction results
-            self._create_prediction_results(prediction, predictions, target_series, prediction.model_parameters.get('frequency'))
+            self._create_prediction_results(
+                prediction, predictions, target_series, frequency or params.get('frequency'),
+                lower=lower, upper=upper,
+            )
             
             # Update prediction
             prediction.status = 'completed'
             prediction.completed_at = datetime.now()
-            prediction.metrics = metrics
+            prediction.metrics = metrics or {}
             prediction.predictions_data = self._sanitize_json({
                 'forecast': predictions.tolist(),
                 'forecast_dates': self._generate_forecast_dates(
                     target_series.index[-1], 
                     prediction.prediction_horizon,
-                    prediction.model_parameters.get('frequency')
+                    frequency
                 ),
-                'fit_results': fit_results
+                'fit_results': fit_results,
+                'lower': lower.tolist() if lower is not None else None,
+                'upper': upper.tolist() if upper is not None else None,
             })
             # Versioning snapshot (lightweight info)
             prediction.model_version = prediction.prediction_model.algorithm_type
@@ -252,7 +320,9 @@ class PredictionService:
     
     def _create_prediction_results(self, prediction: Prediction, 
                                  forecasts: pd.Series, original_data: pd.Series,
-                                 frequency: Optional[str] = None):
+                                 frequency: Optional[str] = None,
+                                 lower: Optional[pd.Series] = None,
+                                 upper: Optional[pd.Series] = None):
         """Create PredictionResult objects"""
         # Clear existing results
         prediction.results.all().delete()
@@ -276,10 +346,14 @@ class PredictionService:
         
         # Create results
         for i, (date, forecast_value) in enumerate(zip(forecast_dates, forecasts)):
+            lo = float(lower.iloc[i]) if lower is not None and i < len(lower) else None
+            hi = float(upper.iloc[i]) if upper is not None and i < len(upper) else None
             PredictionResult.objects.create(
                 prediction=prediction,
                 timestamp=date,
-                predicted_value=float(forecast_value)
+                predicted_value=float(forecast_value),
+                confidence_interval_lower=lo,
+                confidence_interval_upper=hi,
             )
     
     def _generate_forecast_dates(self, last_date: pd.Timestamp, horizon: int, frequency: Optional[str] = None) -> List[str]:
@@ -304,10 +378,12 @@ class PredictionService:
         """Compare multiple models on the same dataset"""
         try:
             # Prepare data
-            target_series, _ = self.prepare_data(dataset)
+            target_series, exog_df = self.prepare_data(dataset)
             
             # Split data
-            train_data, val_data, test_data = self.split_data(target_series, train_size)
+            train_data, val_data, test_data, train_exog, val_exog, test_exog = self.split_data(
+                target_series, train_size, exog=exog_df
+            )
             
             # Create forecasters
             forecasters = []
@@ -339,43 +415,43 @@ class PredictionService:
             }
     
     def get_model_recommendations(self, dataset: Dataset) -> Dict[str, Any]:
-        """Get model recommendations based on data characteristics"""
+        """Empirical recommendations via ModelChampionship (with characteristic flags)."""
         try:
-            target_series, _ = self.prepare_data(dataset)
-            
-            recommendations = []
-            
-            # Analyze data characteristics
+            from .championship import ModelChampionship
+
+            target_series, exog_df = self.prepare_data(dataset)
             data_length = len(target_series)
             has_trend = self._detect_trend(target_series)
             has_seasonality = self._detect_seasonality(target_series)
             is_stationary = self._is_stationary(target_series)
-            
-            # Recommend models based on characteristics
-            if data_length < 50:
-                recommendations.extend(['linear_regression', 'ridge', 'lasso'])
-            elif data_length < 200:
-                recommendations.extend(['arima', 'ets', 'linear_regression', 'ridge'])
-            else:
-                recommendations.extend(['arima', 'ets', 'prophet', 'lstm', 'xgboost'])
-            
-            if has_seasonality:
-                recommendations.extend(['ets', 'prophet'])
-            
-            if not is_stationary:
-                recommendations.extend(['arima', 'prophet'])
-            
-            # Remove duplicates and limit to top 5
-            recommendations = list(dict.fromkeys(recommendations))[:5]
-            
+
+            champ = ModelChampionship()
+            result = champ.run(target_series, exog=exog_df)
+
+            recommendations = result.get('ranking', [])
+            # JSON-safe ranking (no inf)
+            safe_ranking = []
+            for r in recommendations:
+                safe_ranking.append({
+                    'algorithm': r.get('algorithm'),
+                    'rmse': None if r.get('rmse') in (float('inf'), None) or (isinstance(r.get('rmse'), float) and r['rmse'] == float('inf')) else r.get('rmse'),
+                    'mae': None if r.get('mae') == float('inf') else r.get('mae'),
+                    'smape': None if r.get('smape') == float('inf') else r.get('smape'),
+                    'windows': r.get('windows'),
+                    'error': r.get('error'),
+                })
             return {
                 'success': True,
-                'recommendations': recommendations,
+                'recommendations': [r['algorithm'] for r in safe_ranking if r.get('rmse') is not None][:5] or [r['algorithm'] for r in safe_ranking[:5]],
+                'ranking': safe_ranking,
+                'best_model': result.get('best_model'),
+                'beats_baseline': result.get('beats_baseline'),
                 'data_characteristics': {
                     'length': data_length,
                     'has_trend': has_trend,
                     'has_seasonality': has_seasonality,
-                    'is_stationary': is_stationary
+                    'is_stationary': is_stationary,
+                    'has_exog': exog_df is not None,
                 }
             }
             
@@ -389,10 +465,13 @@ class PredictionService:
         """Detect if data has a trend"""
         try:
             from statsmodels.tsa.seasonal import seasonal_decompose
-            decomposition = seasonal_decompose(data, model='additive', period=min(12, len(data)//2))
+            period = min(12, max(2, len(data) // 2))
+            decomposition = seasonal_decompose(data, model='additive', period=period)
             trend = decomposition.trend.dropna()
             return abs(trend.iloc[-1] - trend.iloc[0]) > 0.1 * data.std()
-        except:
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).debug("Trend detection failed: %s", exc)
             return False
     
     def _detect_seasonality(self, data: pd.Series) -> bool:
@@ -401,10 +480,13 @@ class PredictionService:
             from statsmodels.tsa.seasonal import seasonal_decompose
             if len(data) < 24:
                 return False
-            decomposition = seasonal_decompose(data, model='additive', period=min(12, len(data)//2))
+            period = min(12, max(2, len(data) // 2))
+            decomposition = seasonal_decompose(data, model='additive', period=period)
             seasonal = decomposition.seasonal.dropna()
             return seasonal.std() > 0.1 * data.std()
-        except:
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).debug("Seasonality detection failed: %s", exc)
             return False
     
     def _is_stationary(self, data: pd.Series) -> bool:
@@ -413,7 +495,9 @@ class PredictionService:
             from statsmodels.tsa.stattools import adfuller
             result = adfuller(data.dropna())
             return result[1] < 0.05  # p-value < 0.05 means stationary
-        except:
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).debug("ADF test failed: %s", exc)
             return False
     
     def create_visualization_data(self, prediction: Prediction) -> Dict[str, Any]:
@@ -526,7 +610,13 @@ def initialize_prediction_models():
             'algorithm_type': 'xgboost',
             'description': 'Gradient boosting otimizado. Muito eficaz para competições de ML.',
             'parameters': {'n_estimators': 100, 'max_depth': 6, 'learning_rate': 0.1}
-        }
+        },
+        {
+            'name': 'LightGBM',
+            'algorithm_type': 'lightgbm',
+            'description': 'Gradient boosting rápido e eficiente. Bom com muitas features.',
+            'parameters': {'n_estimators': 100, 'learning_rate': 0.1, 'num_leaves': 31}
+        },
     ]
     
     for model_data in models_data:

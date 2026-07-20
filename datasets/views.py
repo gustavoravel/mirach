@@ -146,22 +146,30 @@ def dataset_preview(request, pk):
         return redirect('datasets:list')
     # Gera preview a partir do arquivo salvo
     import pandas as pd
+    from .utils import build_data_profile
     detected = request.session.get(f'ds_preview_{pk}', {}).get('detected', {})
     suggested_timestamp = request.session.get(f'ds_preview_{pk}', {}).get('suggested_timestamp')
     suggested_target = request.session.get(f'ds_preview_{pk}', {}).get('suggested_target')
+    validation = {'valid': True, 'errors': [], 'warnings': []}
     try:
-        if dataset.file.name.lower().endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(dataset.file.path)
-        else:
-            df = pd.read_csv(dataset.file.path, low_memory=False)
+        with dataset.file.open('rb') as fh:
+            if dataset.file.name.lower().endswith(('.xlsx', '.xls')):
+                df = pd.read_excel(fh)
+            else:
+                df = pd.read_csv(fh, low_memory=False)
         preview_html = df.head(10).to_html(classes='table table-sm table-striped', index=False)
+        profile = build_data_profile(df, suggested_timestamp, suggested_target)
+        validation['warnings'] = list(profile.get('warnings') or [])
+        if not dataset.data_profile:
+            dataset.data_profile = profile
+            dataset.save(update_fields=['data_profile'])
     except Exception:
         preview_html = '<div class="text-danger">Não foi possível gerar o preview.</div>'
     return render(request, 'datasets/preview.html', {
         'dataset': dataset,
         'preview_html': preview_html,
         'detected': detected,
-        'validation': {'valid': True, 'errors': [], 'warnings': []},
+        'validation': validation,
         'suggested_timestamp': suggested_timestamp,
         'suggested_target': suggested_target,
     })
@@ -220,19 +228,68 @@ def column_mapping(request, pk):
         
         messages.success(request, 'Mapeamento de colunas salvo com sucesso!')
         return redirect('datasets:detail', pk=dataset.pk)
+
+    # Suggest mappings via NIM ingest when available
+    ai_suggestion = dataset.ai_interpretation or {}
+    try:
+        from predictions.llm.ingest_agent import suggest_column_mappings
+        if not ai_suggestion:
+            ai_suggestion = suggest_column_mappings(dataset) or {}
+            if ai_suggestion:
+                dataset.ai_interpretation = ai_suggestion
+                dataset.save(update_fields=['ai_interpretation'])
+                # Pre-fill ColumnMapping if empty
+                if not dataset.column_mappings.exists():
+                    _apply_ai_mappings(dataset, ai_suggestion)
+    except Exception:
+        pass
     
-    return render(request, 'datasets/mapping.html', {'dataset': dataset})
+    return render(request, 'datasets/mapping.html', {
+        'dataset': dataset,
+        'ai_interpretation': ai_suggestion,
+    })
+
+
+def _apply_ai_mappings(dataset, interpretation: dict):
+    """Create ColumnMapping rows from DatasetInterpretation dict."""
+    mapping_plan = {}
+    ts = interpretation.get('timestamp_column')
+    tg = interpretation.get('target_column')
+    if ts:
+        mapping_plan[ts] = 'timestamp'
+    if tg:
+        mapping_plan[tg] = 'target'
+    for col in interpretation.get('feature_columns') or []:
+        mapping_plan[col] = 'feature'
+    for col in interpretation.get('ignore_columns') or []:
+        mapping_plan[col] = 'ignore'
+    for sug in interpretation.get('column_suggestions') or []:
+        name = sug.get('column_name') if isinstance(sug, dict) else getattr(sug, 'column_name', None)
+        ctype = sug.get('column_type') if isinstance(sug, dict) else getattr(sug, 'column_type', None)
+        if name and ctype and name not in mapping_plan:
+            mapping_plan[name] = ctype
+    for col_name, col_type in mapping_plan.items():
+        ColumnMapping.objects.update_or_create(
+            dataset=dataset,
+            column_name=col_name,
+            defaults={'column_type': col_type},
+        )
 
 
 @login_required
 def dataset_process(request, pk):
-    dataset = get_object_or_404(Dataset, pk=pk, project__owner=request.user)
+    dataset = get_object_or_404(Dataset, pk=pk)
+    if not ProjectMembership.objects.filter(project=dataset.project, user=request.user, role__in=['owner','editor']).exists():
+        messages.error(request, 'Você não tem permissão para processar este dataset.')
+        return redirect('datasets:list')
     
     if request.method == 'POST':
-        # TODO: Implement dataset processing logic
-        dataset.status = 'processed'
-        dataset.save()
-        messages.success(request, 'Dataset processado com sucesso!')
+        from .utils import process_dataset_pipeline
+        result = process_dataset_pipeline(dataset)
+        if result.get('success'):
+            messages.success(request, 'Dataset processado com sucesso!')
+        else:
+            messages.error(request, f"Falha no processamento: {result.get('error')}")
         return redirect('datasets:detail', pk=dataset.pk)
     
     return render(request, 'datasets/process.html', {'dataset': dataset})

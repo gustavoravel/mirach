@@ -91,7 +91,7 @@
         </div>
         
         <!-- Métricas -->
-        {% if prediction.status == 'completed' and prediction.metrics %}
+        {% if prediction.status == 'completed' and prediction.metrics.rmse %}
         <div class="card mb-4">
             <div class="card-header">
                 <h6><i class="fas fa-chart-bar"></i> Métricas de Performance</h6>
@@ -115,6 +115,15 @@
                 </div>
             </div>
         </div>
+        {% elif prediction.status == 'completed' %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h6><i class="fas fa-chart-bar"></i> Métricas de Performance</h6>
+            </div>
+            <div class="card-body">
+                <small class="text-muted">Métricas indisponíveis (sem conjunto de validação).</small>
+            </div>
+        </div>
         {% endif %}
 
         {% if prediction.status == 'completed' and prediction.explainability %}
@@ -123,6 +132,36 @@
                 <h6><i class="fas fa-lightbulb"></i> Explainability</h6>
             </div>
             <div class="card-body">
+                {% if prediction.explainability.ai_insights %}
+                <div class="mb-3">
+                    <strong>Insights (IA)</strong>
+                    <p class="mb-2">{{ prediction.explainability.ai_insights.summary }}</p>
+                    {% if prediction.explainability.ai_insights.drivers %}
+                    <div class="mb-1"><small class="text-muted">Drivers</small></div>
+                    <ul class="small">
+                      {% for d in prediction.explainability.ai_insights.drivers %}
+                      <li>{{ d }}</li>
+                      {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if prediction.explainability.ai_insights.risks %}
+                    <div class="mb-1"><small class="text-muted">Riscos</small></div>
+                    <ul class="small">
+                      {% for r in prediction.explainability.ai_insights.risks %}
+                      <li>{{ r }}</li>
+                      {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% if prediction.explainability.ai_insights.next_steps %}
+                    <div class="mb-1"><small class="text-muted">Próximos passos</small></div>
+                    <ul class="small">
+                      {% for s in prediction.explainability.ai_insights.next_steps %}
+                      <li>{{ s }}</li>
+                      {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+                {% endif %}
                 {% if prediction.explainability.feature_importances %}
                 <div class="mb-2"><strong>Importâncias</strong></div>
                 <pre class="small bg-light p-2 rounded">{{ prediction.explainability.feature_importances|safe }}</pre>
@@ -131,7 +170,7 @@
                 <div class="mb-2"><strong>Coeficientes</strong></div>
                 <pre class="small bg-light p-2 rounded">{{ prediction.explainability.coefficients|safe }}</pre>
                 {% endif %}
-                {% if not prediction.explainability.feature_importances and not prediction.explainability.coefficients %}
+                {% if not prediction.explainability.ai_insights and not prediction.explainability.feature_importances and not prediction.explainability.coefficients %}
                 <small class="text-muted">Sem dados de explainability para este modelo.</small>
                 {% endif %}
             </div>

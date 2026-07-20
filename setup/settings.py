@@ -52,6 +52,10 @@ env = environ.Env(
     EMAIL_USE_TLS=(bool, True),
     # Cache
     CACHE_URL=(str, ''),
+    # NVIDIA NIM
+    NVIDIA_NIM_API_KEY=(str, ''),
+    NVIDIA_NIM_BASE_URL=(str, 'https://integrate.api.nvidia.com/v1'),
+    NVIDIA_NIM_MODEL=(str, 'nvidia/nemotron-3-ultra-550b-a55b'),
 )
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
@@ -318,3 +322,17 @@ REST_FRAMEWORK = {
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ----------------------------------------------------------------------------
+# NVIDIA NIM (agentic layer)
+# ----------------------------------------------------------------------------
+NVIDIA_NIM_API_KEY = env('NVIDIA_NIM_API_KEY', default='')
+NVIDIA_NIM_BASE_URL = env(
+    'NVIDIA_NIM_BASE_URL',
+    default='https://integrate.api.nvidia.com/v1',
+)
+NVIDIA_NIM_MODEL = env(
+    'NVIDIA_NIM_MODEL',
+    default='nvidia/nemotron-3-ultra-550b-a55b',
+)
+NIM_ENABLED = bool(NVIDIA_NIM_API_KEY)

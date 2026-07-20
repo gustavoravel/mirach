@@ -223,3 +223,160 @@ def prepare_time_series_data(df: pd.DataFrame, timestamp_col: str, target_col: s
     df_clean = df_clean.set_index(timestamp_col)
     
     return df_clean
+
+
+def _looks_dayfirst(sample_values) -> bool:
+    """Heuristic: if many values have day > 12 in first component, prefer dayfirst."""
+    dayfirst_hits = 0
+    checks = 0
+    for v in sample_values:
+        if v is None or (isinstance(v, float) and np.isnan(v)):
+            continue
+        s = str(v).strip()
+        if '/' in s or '-' in s:
+            parts = s.replace('-', '/').split('/')
+            if len(parts) >= 2 and parts[0].isdigit():
+                checks += 1
+                if int(parts[0]) > 12:
+                    dayfirst_hits += 1
+        if checks >= 20:
+            break
+    return dayfirst_hits > 0 or checks == 0
+
+
+def build_data_profile(
+    df: pd.DataFrame,
+    timestamp_col: Optional[str] = None,
+    target_col: Optional[str] = None,
+) -> Dict:
+    """
+    Compact profile for persistence and NIM ingest (no full dataset).
+    """
+    profile: Dict = {
+        'rows': int(len(df)),
+        'columns': list(map(str, df.columns.tolist())),
+        'dtypes': {str(c): str(df[c].dtype) for c in df.columns},
+        'null_pct': {
+            str(c): float(df[c].isna().mean() * 100.0) for c in df.columns
+        },
+        'sample_rows': df.head(5).astype(str).to_dict(orient='records'),
+        'dayfirst': True,
+        'inferred_freq': None,
+        'duplicate_timestamps': 0,
+        'gaps_estimate': None,
+        'warnings': [],
+        'errors': [],
+    }
+
+    # Dayfirst heuristic on object-like columns
+    for col in df.columns:
+        if df[col].dtype == object or str(df[col].dtype).startswith('string'):
+            profile['dayfirst'] = _looks_dayfirst(df[col].head(30).tolist())
+            break
+
+    if timestamp_col and timestamp_col in df.columns:
+        ts = pd.to_datetime(df[timestamp_col], errors='coerce', dayfirst=profile['dayfirst'])
+        valid = ts.dropna().sort_values()
+        profile['duplicate_timestamps'] = int(valid.duplicated().sum())
+        if len(valid) >= 3:
+            try:
+                inferred = pd.infer_freq(valid.reset_index(drop=True))
+                profile['inferred_freq'] = inferred
+            except Exception:
+                profile['inferred_freq'] = None
+            diffs = valid.diff().dropna()
+            if len(diffs) > 0:
+                median_delta = diffs.median()
+                if median_delta and median_delta > pd.Timedelta(0):
+                    gap_count = int((diffs > median_delta * 1.5).sum())
+                    profile['gaps_estimate'] = gap_count
+                    if gap_count > 0:
+                        profile['warnings'].append(
+                            f"Estimados {gap_count} gaps temporais acima de 1.5x o intervalo mediano"
+                        )
+        if profile['duplicate_timestamps'] > 0:
+            profile['warnings'].append(
+                f"{profile['duplicate_timestamps']} timestamps duplicados"
+            )
+
+    if target_col and target_col in df.columns:
+        series = pd.to_numeric(df[target_col], errors='coerce')
+        profile['target_stats'] = {
+            'mean': float(series.mean()) if series.notna().any() else None,
+            'std': float(series.std()) if series.notna().any() else None,
+            'min': float(series.min()) if series.notna().any() else None,
+            'max': float(series.max()) if series.notna().any() else None,
+            'null_count': int(series.isna().sum()),
+        }
+        if series.notna().sum() == 0:
+            profile['errors'].append(f"Coluna alvo '{target_col}' sem valores numéricos válidos")
+
+    return profile
+
+
+def process_dataset_pipeline(dataset, timestamp_col: str = None, target_col: str = None) -> Dict:
+    """
+    Real processing: read, profile, validate; persist profile on dataset.
+    Fatal only when timestamp/target invalid after mapping.
+    """
+    from django.utils import timezone
+
+    try:
+        ext = (dataset.file_type or '').lower() or os.path.splitext(dataset.file.name)[1].lower()
+        with dataset.file.open('rb') as fh:
+            if ext in ['.xlsx', '.xls']:
+                df = pd.read_excel(fh)
+            elif ext == '.csv':
+                df = pd.read_csv(fh, sep=None, engine='python', low_memory=False)
+            else:
+                return {'success': False, 'error': f'Unsupported type: {ext}'}
+
+        # Resolve mappings if not provided
+        if not timestamp_col or not target_col:
+            for m in dataset.column_mappings.all():
+                if m.column_type == 'timestamp':
+                    timestamp_col = timestamp_col or m.column_name
+                elif m.column_type == 'target':
+                    target_col = target_col or m.column_name
+
+        profile = build_data_profile(df, timestamp_col, target_col)
+        validation = {'valid': True, 'errors': [], 'warnings': list(profile.get('warnings') or [])}
+
+        if timestamp_col and target_col:
+            validation = validate_time_series_data(df.copy(), timestamp_col, target_col)
+            # Merge profile warnings
+            for w in profile.get('warnings') or []:
+                if w not in validation['warnings']:
+                    validation['warnings'].append(w)
+            profile['errors'] = validation.get('errors') or []
+            # Fatal only if invalid mapping/types
+            if not validation['valid']:
+                dataset.status = 'error'
+                dataset.error_message = '; '.join(validation['errors'])
+                dataset.data_profile = profile
+                dataset.save(update_fields=['status', 'error_message', 'data_profile'])
+                return {
+                    'success': False,
+                    'error': dataset.error_message,
+                    'profile': profile,
+                    'validation': validation,
+                }
+
+        dataset.data_profile = profile
+        dataset.total_rows = len(df)
+        dataset.total_columns = len(df.columns)
+        dataset.column_names = list(map(str, df.columns.tolist()))
+        dataset.status = 'processed'
+        dataset.processed_at = timezone.now()
+        dataset.error_message = ''
+        dataset.save()
+        return {
+            'success': True,
+            'profile': profile,
+            'validation': validation,
+        }
+    except Exception as e:
+        dataset.status = 'error'
+        dataset.error_message = str(e)
+        dataset.save(update_fields=['status', 'error_message'])
+        return {'success': False, 'error': str(e)}

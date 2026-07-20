@@ -130,17 +130,37 @@ class BaseForecaster:
 
 
 class ARIMAForecaster(BaseForecaster):
-    """ARIMA (AutoRegressive Integrated Moving Average) model"""
+    """ARIMA / SARIMAX model (supports optional exogenous regressors)."""
     
-    def __init__(self, order: Tuple[int, int, int] = None, seasonal_order: Tuple[int, int, int, int] = None):
+    def __init__(self, order: Tuple[int, int, int] = None, seasonal_order: Tuple[int, int, int, int] = None,
+                 use_auto_arima: bool = False):
         super().__init__("ARIMA")
         self.order = order or (1, 1, 1)
         self.seasonal_order = seasonal_order
         self.auto_order = order is None
+        self.use_auto_arima = use_auto_arima
         self.fitted_model = None
+        self._exog_train: Optional[pd.DataFrame] = None
+        self._last_ci: Optional[pd.DataFrame] = None
         
     def _find_best_order(self, data: pd.Series) -> Tuple[int, int, int]:
-        """Find optimal ARIMA order using AIC"""
+        """Find optimal ARIMA order via pmdarima when available, else AIC grid."""
+        if self.use_auto_arima:
+            try:
+                import pmdarima as pm
+                auto = pm.auto_arima(
+                    data,
+                    seasonal=False,
+                    max_p=3,
+                    max_q=3,
+                    max_d=2,
+                    suppress_warnings=True,
+                    error_action='ignore',
+                    stepwise=True,
+                )
+                return tuple(int(x) for x in auto.order)
+            except Exception:
+                pass
         from itertools import product
         
         p_values = range(0, 4)
@@ -157,14 +177,16 @@ class ARIMAForecaster(BaseForecaster):
                 if fitted_model.aic < best_aic:
                     best_aic = fitted_model.aic
                     best_order = (p, d, q)
-            except:
+            except Exception:
                 continue
                 
         return best_order
     
-    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
-        """Fit ARIMA model"""
+    def fit(self, data: pd.Series, exog: Optional[pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
+        """Fit ARIMA/SARIMAX model"""
         try:
+            from statsmodels.tsa.statespace.sarimax import SARIMAX
+
             # Sanitize data
             if not isinstance(data, pd.Series):
                 data = pd.Series(data)
@@ -173,14 +195,34 @@ class ARIMAForecaster(BaseForecaster):
             # Ensure sorted by index
             if not data.index.is_monotonic_increasing:
                 data = data.sort_index()
+
+            exog_aligned = None
+            if exog is not None and len(exog) > 0:
+                exog_aligned = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce')
+                exog_aligned = exog_aligned.ffill().bfill()
+                self._exog_train = exog_aligned.copy()
+
             # Use a simple integer index to avoid backend issues comparing index types
             data = pd.Series(data.values, index=pd.RangeIndex(start=0, stop=len(data), step=1), name=data.name)
+            if exog_aligned is not None:
+                exog_aligned = pd.DataFrame(
+                    exog_aligned.values,
+                    index=data.index,
+                    columns=exog_aligned.columns,
+                )
             self._fit_series = data
             if self.auto_order:
                 self.order = self._find_best_order(data)
             
-            self.model = ARIMA(data, order=self.order, seasonal_order=self.seasonal_order)
-            fitted_model = self.model.fit()
+            self.model = SARIMAX(
+                data,
+                exog=exog_aligned,
+                order=self.order,
+                seasonal_order=self.seasonal_order or (0, 0, 0, 0),
+                enforce_stationarity=False,
+                enforce_invertibility=False,
+            )
+            fitted_model = self.model.fit(disp=False)
             self.is_fitted = True
             self.fitted_model = fitted_model
             
@@ -189,18 +231,43 @@ class ARIMAForecaster(BaseForecaster):
                 'seasonal_order': self.seasonal_order,
                 'aic': fitted_model.aic,
                 'bic': fitted_model.bic,
-                'params': self._coerce_params(getattr(fitted_model, 'params', {}))
+                'params': self._coerce_params(getattr(fitted_model, 'params', {})),
+                'used_exog': exog_aligned is not None,
             }
         except Exception as e:
             raise ValueError(f"ARIMA fitting failed: {str(e)}")
     
-    def predict(self, steps: int, **kwargs) -> pd.Series:
-        """Make ARIMA predictions"""
+    def predict(self, steps: int, exog: Optional[pd.DataFrame] = None, **kwargs) -> pd.Series:
+        """Make ARIMA predictions (optionally with future exog)."""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
-        res = self.fitted_model.get_forecast(steps=steps)
+        future_exog = None
+        if self._exog_train is not None:
+            if exog is not None and len(exog) >= steps:
+                future_exog = exog.iloc[:steps].copy()
+                future_exog.index = pd.RangeIndex(start=0, stop=steps, step=1)
+            else:
+                # Hold last known exog values forward
+                last = self._exog_train.iloc[[-1]].values
+                future_exog = pd.DataFrame(
+                    np.repeat(last, steps, axis=0),
+                    columns=self._exog_train.columns,
+                    index=pd.RangeIndex(start=0, stop=steps, step=1),
+                )
+        res = self.fitted_model.get_forecast(steps=steps, exog=future_exog)
         forecast = res.predicted_mean
+        try:
+            self._last_ci = res.conf_int(alpha=0.05)
+        except Exception:
+            self._last_ci = None
         return pd.Series(forecast.values if hasattr(forecast, 'values') else forecast, name='forecast')
+
+    def get_prediction_intervals(self) -> Optional[Tuple[pd.Series, pd.Series]]:
+        if self._last_ci is None or self._last_ci.shape[1] < 2:
+            return None
+        lower = pd.Series(self._last_ci.iloc[:, 0].values, name='lower')
+        upper = pd.Series(self._last_ci.iloc[:, 1].values, name='upper')
+        return lower, upper
 
 
 class ETSForecaster(BaseForecaster):
@@ -246,47 +313,94 @@ class ETSForecaster(BaseForecaster):
 
 
 class ProphetForecaster(BaseForecaster):
-    """Facebook Prophet model"""
+    """Facebook Prophet model (supports optional exogenous regressors)."""
     
     def __init__(self, **kwargs):
         if not PROPHET_AVAILABLE:
             raise ImportError("Prophet is not available. Install with: pip install prophet")
         super().__init__("Prophet")
-        self.prophet_kwargs = kwargs
+        # Strip non-Prophet keys that may arrive from UI/championship
+        self._exog_cols: List[str] = []
+        self._exog_train: Optional[pd.DataFrame] = None
+        self._last_forecast_df: Optional[pd.DataFrame] = None
+        allowed = {
+            'growth', 'changepoints', 'n_changepoints', 'changepoint_range',
+            'yearly_seasonality', 'weekly_seasonality', 'daily_seasonality',
+            'holidays', 'seasonality_mode', 'seasonality_prior_scale',
+            'holidays_prior_scale', 'changepoint_prior_scale', 'mcmc_samples',
+            'interval_width', 'uncertainty_samples', 'stan_backend',
+        }
+        self.prophet_kwargs = {k: v for k, v in kwargs.items() if k in allowed}
         
-    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+    def fit(self, data: pd.Series, exog: Optional[pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
         """Fit Prophet model"""
         try:
             self._fit_series = data
             # Prepare data for Prophet
             df = pd.DataFrame({
-                'ds': data.index,
+                'ds': pd.to_datetime(data.index),
                 'y': data.values
             })
-            
+
             self.model = Prophet(**self.prophet_kwargs)
+            if exog is not None and len(exog) > 0:
+                exog_aligned = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce')
+                exog_aligned = exog_aligned.ffill().bfill()
+                self._exog_train = exog_aligned.copy()
+                self._exog_cols = list(exog_aligned.columns)
+                for col in self._exog_cols:
+                    self.model.add_regressor(col)
+                    df[col] = exog_aligned[col].values
+
             self.model.fit(df)
             self.is_fitted = True
             
             return {
                 'params': self.prophet_kwargs,
-                'components': list(self.model.component_modes.keys())
+                'components': list(self.model.component_modes.keys()),
+                'used_exog': bool(self._exog_cols),
             }
         except Exception as e:
             raise ValueError(f"Prophet fitting failed: {str(e)}")
     
-    def predict(self, steps: int, **kwargs) -> pd.Series:
+    def predict(self, steps: int, exog: Optional[pd.DataFrame] = None, **kwargs) -> pd.Series:
         """Make Prophet predictions"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
             
         # Create future dataframe
         future = self.model.make_future_dataframe(periods=steps)
+        if self._exog_cols:
+            hist = self._exog_train.reset_index(drop=True) if self._exog_train is not None else None
+            for col in self._exog_cols:
+                if exog is not None and col in exog.columns and len(exog) >= steps:
+                    future_vals = list(exog[col].iloc[:steps].values)
+                else:
+                    last_val = float(hist[col].iloc[-1]) if hist is not None else 0.0
+                    future_vals = [last_val] * steps
+                # Align: history length + future steps
+                hist_vals = list(hist[col].values) if hist is not None else [0.0] * (len(future) - steps)
+                if len(hist_vals) < len(future) - steps:
+                    hist_vals = hist_vals + [hist_vals[-1] if hist_vals else 0.0] * ((len(future) - steps) - len(hist_vals))
+                hist_vals = hist_vals[: len(future) - steps]
+                future[col] = hist_vals + future_vals
+
         forecast = self.model.predict(future)
+        self._last_forecast_df = forecast.tail(steps).copy()
         
         # Return only the forecasted values
         forecast_values = forecast['yhat'].tail(steps)
         return pd.Series(forecast_values.values, name='forecast')
+
+    def get_prediction_intervals(self) -> Optional[Tuple[pd.Series, pd.Series]]:
+        if self._last_forecast_df is None:
+            return None
+        if 'yhat_lower' not in self._last_forecast_df.columns:
+            return None
+        return (
+            pd.Series(self._last_forecast_df['yhat_lower'].values, name='lower'),
+            pd.Series(self._last_forecast_df['yhat_upper'].values, name='upper'),
+        )
 
 
 class LSTMForecaster(BaseForecaster):
@@ -378,6 +492,10 @@ class MLForecaster(BaseForecaster):
         self.model_type = model_type
         self.kwargs = kwargs
         self.scaler = StandardScaler()
+        self._exog_train: Optional[pd.DataFrame] = None
+        self._feature_columns: Optional[List[str]] = None
+        self.feature_importances_: Optional[Dict[str, float]] = None
+        self._residual_std: Optional[float] = None
     
     def _filtered_kwargs(self, estimator_cls, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         try:
@@ -385,13 +503,18 @@ class MLForecaster(BaseForecaster):
             allowed = set(sig.parameters.keys())
             # Remove 'self'
             allowed.discard('self')
-            return {k: v for k, v in kwargs.items() if k in allowed}
+            filtered = {k: v for k, v in kwargs.items() if k in allowed}
+            # Enforce reproducible seeds when supported
+            if 'random_state' in allowed and 'random_state' not in filtered:
+                filtered['random_state'] = 42
+            return filtered
         except Exception:
             # Fallback: remove known non-estimator keys
             blacklist = {'frequency'}
             return {k: v for k, v in kwargs.items() if k not in blacklist}
         
-    def _create_features(self, data: pd.Series, lags: int = 10) -> pd.DataFrame:
+    def _create_features(self, data: pd.Series, lags: int = 10,
+                         exog: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """Create comprehensive time series features for ML models"""
         # Ensure the series has a name for column operations
         series_name = data.name or 'target'
@@ -437,10 +560,16 @@ class MLForecaster(BaseForecaster):
         if len(data) > 10:
             df['squared'] = data ** 2
             df['sqrt'] = np.sqrt(np.abs(data))
+
+        # Exogenous features aligned to index
+        if exog is not None and len(exog) > 0:
+            exog_aligned = exog.reindex(data.index)
+            for col in exog_aligned.columns:
+                df[f'exog_{col}'] = pd.to_numeric(exog_aligned[col], errors='coerce')
         
         return df.dropna()
     
-    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+    def fit(self, data: pd.Series, exog: Optional[pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
         """Fit ML model"""
         try:
             # Ensure named series
@@ -448,13 +577,16 @@ class MLForecaster(BaseForecaster):
             if data.name != series_name:
                 data = data.rename(series_name)
             self._fit_series = data
+            if exog is not None and len(exog) > 0:
+                self._exog_train = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce').ffill().bfill()
             # Create features
-            feature_df = self._create_features(data)
+            feature_df = self._create_features(data, exog=self._exog_train)
             # Guard against empty feature set after dropna/lagging
             if feature_df.shape[0] == 0:
                 raise ValueError("Insufficient samples after feature engineering. Provide more historical data.")
             X = feature_df.drop(columns=[series_name])
             y = feature_df[series_name]
+            self._feature_columns = list(X.columns)
             
             # Sanitize features: replace inf/nan with finite values
             X = X.replace([np.inf, -np.inf], np.nan)
@@ -479,23 +611,39 @@ class MLForecaster(BaseForecaster):
             elif self.model_type == 'svr':
                 self.model = SVR(**self._filtered_kwargs(SVR, self.kwargs))
             elif self.model_type == 'neural_network':
-                self.model = MLPRegressor(**self._filtered_kwargs(MLPRegressor, self.kwargs))
+                filtered = self._filtered_kwargs(MLPRegressor, self.kwargs)
+                if 'random_state' not in filtered:
+                    filtered['random_state'] = 42
+                self.model = MLPRegressor(**filtered)
             else:
                 raise ValueError(f"Unknown model type: {self.model_type}")
             
             # Train model
             self.model.fit(X_scaled, y)
             self.is_fitted = True
+
+            # Residual std for CI approximation
+            in_sample = self.model.predict(X_scaled)
+            resid = y.values - in_sample
+            self._residual_std = float(np.std(resid)) if len(resid) else None
+
+            if hasattr(self.model, 'feature_importances_'):
+                self.feature_importances_ = dict(zip(X.columns, self.model.feature_importances_.tolist()))
+            elif hasattr(self.model, 'coef_'):
+                coefs = np.asarray(self.model.coef_).ravel()
+                self.feature_importances_ = dict(zip(X.columns, coefs.tolist()))
             
             return {
                 'model_type': self.model_type,
                 'n_features': X.shape[1],
-                'n_samples': len(y)
+                'n_samples': len(y),
+                'feature_importance': self.feature_importances_,
+                'used_exog': self._exog_train is not None,
             }
         except Exception as e:
             raise ValueError(f"ML model fitting failed: {str(e)}")
     
-    def predict(self, steps: int, **kwargs) -> pd.Series:
+    def predict(self, steps: int, exog: Optional[pd.DataFrame] = None, **kwargs) -> pd.Series:
         """Make ML predictions with improved time series forecasting"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
@@ -506,10 +654,13 @@ class MLForecaster(BaseForecaster):
         # Use more historical data for better context (at least 30 points)
         min_context = min(30, len(self._fit_series))
         last_data = self._fit_series.tail(min_context)
+        exog_ctx = None
+        if self._exog_train is not None:
+            exog_ctx = self._exog_train.reindex(last_data.index).ffill().bfill()
         
         for step in range(steps):
             # Create features for next prediction
-            feature_df = self._create_features(last_data)
+            feature_df = self._create_features(last_data, exog=exog_ctx)
             
             if feature_df.empty:
                 # Fallback: use trend-based naive forecast
@@ -520,16 +671,13 @@ class MLForecaster(BaseForecaster):
                     pred = float(last_data.iloc[-1])
             else:
                 X = feature_df.drop(columns=[last_data.name]).iloc[-1:]
+                if self._feature_columns is not None:
+                    for col in self._feature_columns:
+                        if col not in X.columns:
+                            X[col] = 0.0
+                    X = X[self._feature_columns]
                 X_scaled = self.scaler.transform(X)
                 pred = float(self.model.predict(X_scaled)[0])
-                
-                # Add some randomness to prevent identical predictions
-                # Use a small amount of noise based on historical volatility
-                if len(last_data) > 5:
-                    volatility = last_data.rolling(window=5).std().iloc[-1]
-                    if not pd.isna(volatility) and volatility > 0:
-                        noise = np.random.normal(0, volatility * 0.1)
-                        pred += noise
             
             # Apply non-negative constraint if needed (after all processing)
             if len(last_data) > 0 and (last_data >= 0).sum() / len(last_data) > 0.8:
@@ -555,8 +703,26 @@ class MLForecaster(BaseForecaster):
             
             new_point = pd.Series([pred], index=[next_index], name=last_data.name)
             last_data = pd.concat([last_data, new_point]).tail(min_context)
+
+            # Extend exog context (future row or last known)
+            if exog_ctx is not None:
+                if exog is not None and step < len(exog):
+                    row = exog.iloc[[step]].copy()
+                    row.index = [next_index]
+                else:
+                    row = exog_ctx.iloc[[-1]].copy()
+                    row.index = [next_index]
+                exog_ctx = pd.concat([exog_ctx, row]).tail(min_context)
         
         return pd.Series(predictions, name='forecast')
+
+    def get_prediction_intervals(self, predictions: Optional[pd.Series] = None,
+                                 z: float = 1.96) -> Optional[Tuple[pd.Series, pd.Series]]:
+        if self._residual_std is None or predictions is None:
+            return None
+        lower = predictions - z * self._residual_std
+        upper = predictions + z * self._residual_std
+        return lower, upper
 
 
 class XGBoostForecaster(BaseForecaster):
@@ -566,11 +732,22 @@ class XGBoostForecaster(BaseForecaster):
         if not XGBOOST_AVAILABLE:
             raise ImportError("XGBoost is not available. Install with: pip install xgboost")
         super().__init__("XGBoost")
+        kwargs = dict(kwargs)
+        kwargs.setdefault('random_state', 42)
+        kwargs.setdefault('n_jobs', 1)
         self.kwargs = kwargs
         self.scaler = StandardScaler()
+        self._exog_train: Optional[pd.DataFrame] = None
+        self._feature_columns: Optional[List[str]] = None
+        self.feature_importances_: Optional[Dict[str, float]] = None
+        self._residual_std: Optional[float] = None
         
-    def _create_features(self, data: pd.Series, lags: int = 15) -> pd.DataFrame:
+    def _create_features(self, data: pd.Series, lags: int = 15,
+                         exog: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """Create comprehensive features for XGBoost"""
+        series_name = data.name or 'target'
+        if data.name != series_name:
+            data = data.rename(series_name)
         df = pd.DataFrame(data)
         
         # Multiple lag features (more comprehensive)
@@ -614,19 +791,29 @@ class XGBoostForecaster(BaseForecaster):
         if len(data) > 20:
             df['lag_1_x_rolling_mean_7'] = df['lag_1'] * df['rolling_mean_7']
             df['lag_1_x_volatility_5'] = df['lag_1'] * df['volatility_5']
+
+        if exog is not None and len(exog) > 0:
+            exog_aligned = exog.reindex(data.index)
+            for col in exog_aligned.columns:
+                df[f'exog_{col}'] = pd.to_numeric(exog_aligned[col], errors='coerce')
         
         return df.dropna()
     
-    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+    def fit(self, data: pd.Series, exog: Optional[pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
         """Fit XGBoost model"""
         try:
-            # Store the original series for prediction
+            series_name = data.name or 'target'
+            if data.name != series_name:
+                data = data.rename(series_name)
             self._fit_series = data
+            if exog is not None and len(exog) > 0:
+                self._exog_train = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce').ffill().bfill()
             
             # Create features
-            feature_df = self._create_features(data)
-            X = feature_df.drop(columns=[data.name])
-            y = feature_df[data.name]
+            feature_df = self._create_features(data, exog=self._exog_train)
+            X = feature_df.drop(columns=[series_name])
+            y = feature_df[series_name]
+            self._feature_columns = list(X.columns)
             
             # Sanitize features: replace inf/nan with finite values
             X = X.replace([np.inf, -np.inf], np.nan)
@@ -642,16 +829,21 @@ class XGBoostForecaster(BaseForecaster):
             # Train model
             self.model.fit(X, y)
             self.is_fitted = True
+            self.feature_importances_ = dict(zip(X.columns, self.model.feature_importances_.tolist()))
+            in_sample = self.model.predict(X)
+            resid = y.values - in_sample
+            self._residual_std = float(np.std(resid)) if len(resid) else None
             
             return {
                 'n_features': X.shape[1],
                 'n_samples': len(y),
-                'feature_importance': dict(zip(X.columns, self.model.feature_importances_))
+                'feature_importance': self.feature_importances_,
+                'used_exog': self._exog_train is not None,
             }
         except Exception as e:
             raise ValueError(f"XGBoost fitting failed: {str(e)}")
     
-    def predict(self, steps: int, **kwargs) -> pd.Series:
+    def predict(self, steps: int, exog: Optional[pd.DataFrame] = None, **kwargs) -> pd.Series:
         """Make XGBoost predictions with improved time series forecasting"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
@@ -662,9 +854,12 @@ class XGBoostForecaster(BaseForecaster):
         # Use more historical data for better context (at least 50 points for XGBoost)
         min_context = min(50, len(self._fit_series))
         last_data = self._fit_series.tail(min_context)
+        exog_ctx = None
+        if self._exog_train is not None:
+            exog_ctx = self._exog_train.reindex(last_data.index).ffill().bfill()
         
         for step in range(steps):
-            feature_df = self._create_features(last_data)
+            feature_df = self._create_features(last_data, exog=exog_ctx)
             
             if feature_df.empty:
                 # Fallback: use trend-based naive forecast
@@ -675,15 +870,12 @@ class XGBoostForecaster(BaseForecaster):
                     pred = float(last_data.iloc[-1])
             else:
                 X = feature_df.drop(columns=[last_data.name]).iloc[-1:]
+                if self._feature_columns is not None:
+                    for col in self._feature_columns:
+                        if col not in X.columns:
+                            X[col] = 0.0
+                    X = X[self._feature_columns]
                 pred = float(self.model.predict(X)[0])
-                
-                # Add adaptive noise based on feature importance and volatility
-                if len(last_data) > 10:
-                    volatility = last_data.rolling(window=10).std().iloc[-1]
-                    if not pd.isna(volatility) and volatility > 0:
-                        # Use smaller noise for XGBoost as it's more sophisticated
-                        noise = np.random.normal(0, volatility * 0.05)
-                        pred += noise
             
             # Apply non-negative constraint if needed (after all processing)
             if len(last_data) > 0 and (last_data >= 0).sum() / len(last_data) > 0.8:
@@ -709,8 +901,23 @@ class XGBoostForecaster(BaseForecaster):
             
             new_point = pd.Series([pred], index=[next_index], name=last_data.name)
             last_data = pd.concat([last_data, new_point]).tail(min_context)
+
+            if exog_ctx is not None:
+                if exog is not None and step < len(exog):
+                    row = exog.iloc[[step]].copy()
+                    row.index = [next_index]
+                else:
+                    row = exog_ctx.iloc[[-1]].copy()
+                    row.index = [next_index]
+                exog_ctx = pd.concat([exog_ctx, row]).tail(min_context)
         
         return pd.Series(predictions, name='forecast')
+
+    def get_prediction_intervals(self, predictions: Optional[pd.Series] = None,
+                                 z: float = 1.96) -> Optional[Tuple[pd.Series, pd.Series]]:
+        if self._residual_std is None or predictions is None:
+            return None
+        return predictions - z * self._residual_std, predictions + z * self._residual_std
 
 
 class LightGBMForecaster(BaseForecaster):
@@ -719,11 +926,22 @@ class LightGBMForecaster(BaseForecaster):
         if not LIGHTGBM_AVAILABLE:
             raise ImportError("LightGBM is not available. Install with: pip install lightgbm")
         super().__init__("LightGBM")
+        kwargs = dict(kwargs)
+        kwargs.setdefault('random_state', 42)
+        kwargs.setdefault('verbosity', -1)
         self.kwargs = kwargs
         self.scaler = StandardScaler()
+        self._exog_train: Optional[pd.DataFrame] = None
+        self._feature_columns: Optional[List[str]] = None
+        self.feature_importances_: Optional[Dict[str, float]] = None
+        self._residual_std: Optional[float] = None
 
-    def _create_features(self, data: pd.Series, lags: int = 15) -> pd.DataFrame:
+    def _create_features(self, data: pd.Series, lags: int = 15,
+                         exog: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         """Create comprehensive features for LightGBM"""
+        series_name = data.name or 'target'
+        if data.name != series_name:
+            data = data.rename(series_name)
         df = pd.DataFrame(data)
         
         # Multiple lag features (more comprehensive)
@@ -767,17 +985,27 @@ class LightGBMForecaster(BaseForecaster):
         if len(data) > 20:
             df['lag_1_x_rolling_mean_7'] = df['lag_1'] * df['rolling_mean_7']
             df['lag_1_x_volatility_5'] = df['lag_1'] * df['volatility_5']
+
+        if exog is not None and len(exog) > 0:
+            exog_aligned = exog.reindex(data.index)
+            for col in exog_aligned.columns:
+                df[f'exog_{col}'] = pd.to_numeric(exog_aligned[col], errors='coerce')
         
         return df.dropna()
 
-    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+    def fit(self, data: pd.Series, exog: Optional[pd.DataFrame] = None, **kwargs) -> Dict[str, Any]:
         try:
-            # Store the original series for prediction
+            series_name = data.name or 'target'
+            if data.name != series_name:
+                data = data.rename(series_name)
             self._fit_series = data
+            if exog is not None and len(exog) > 0:
+                self._exog_train = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce').ffill().bfill()
             
-            feature_df = self._create_features(data)
-            X = feature_df.drop(columns=[data.name])
-            y = feature_df[data.name]
+            feature_df = self._create_features(data, exog=self._exog_train)
+            X = feature_df.drop(columns=[series_name])
+            y = feature_df[series_name]
+            self._feature_columns = list(X.columns)
             
             # Sanitize features: replace inf/nan with finite values
             X = X.replace([np.inf, -np.inf], np.nan)
@@ -790,16 +1018,20 @@ class LightGBMForecaster(BaseForecaster):
             self.model = lgb.LGBMRegressor(**self.kwargs)
             self.model.fit(X, y)
             self.is_fitted = True
-            importances = dict(zip(X.columns, self.model.feature_importances_.tolist()))
+            self.feature_importances_ = dict(zip(X.columns, self.model.feature_importances_.tolist()))
+            in_sample = self.model.predict(X)
+            resid = y.values - in_sample
+            self._residual_std = float(np.std(resid)) if len(resid) else None
             return {
                 'n_features': X.shape[1],
                 'n_samples': len(y),
-                'feature_importance': importances
+                'feature_importance': self.feature_importances_,
+                'used_exog': self._exog_train is not None,
             }
         except Exception as e:
             raise ValueError(f"LightGBM fitting failed: {str(e)}")
 
-    def predict(self, steps: int, **kwargs) -> pd.Series:
+    def predict(self, steps: int, exog: Optional[pd.DataFrame] = None, **kwargs) -> pd.Series:
         """Make LightGBM predictions with improved time series forecasting"""
         if not self.is_fitted:
             raise ValueError("Model must be fitted first")
@@ -810,9 +1042,12 @@ class LightGBMForecaster(BaseForecaster):
         # Use more historical data for better context (at least 50 points for LightGBM)
         min_context = min(50, len(self._fit_series))
         last_data = self._fit_series.tail(min_context)
+        exog_ctx = None
+        if self._exog_train is not None:
+            exog_ctx = self._exog_train.reindex(last_data.index).ffill().bfill()
         
         for step in range(steps):
-            feature_df = self._create_features(last_data)
+            feature_df = self._create_features(last_data, exog=exog_ctx)
             
             if feature_df.empty:
                 # Fallback: use trend-based naive forecast
@@ -823,15 +1058,12 @@ class LightGBMForecaster(BaseForecaster):
                     pred = float(last_data.iloc[-1])
             else:
                 X = feature_df.drop(columns=[last_data.name]).iloc[-1:]
+                if self._feature_columns is not None:
+                    for col in self._feature_columns:
+                        if col not in X.columns:
+                            X[col] = 0.0
+                    X = X[self._feature_columns]
                 pred = float(self.model.predict(X)[0])
-                
-                # Add adaptive noise based on volatility
-                if len(last_data) > 10:
-                    volatility = last_data.rolling(window=10).std().iloc[-1]
-                    if not pd.isna(volatility) and volatility > 0:
-                        # Use smaller noise for LightGBM as it's more sophisticated
-                        noise = np.random.normal(0, volatility * 0.05)
-                        pred += noise
             
             # Apply non-negative constraint if needed (after all processing)
             if len(last_data) > 0 and (last_data >= 0).sum() / len(last_data) > 0.8:
@@ -857,8 +1089,23 @@ class LightGBMForecaster(BaseForecaster):
             
             new_point = pd.Series([pred], index=[next_index], name=last_data.name)
             last_data = pd.concat([last_data, new_point]).tail(min_context)
+
+            if exog_ctx is not None:
+                if exog is not None and step < len(exog):
+                    row = exog.iloc[[step]].copy()
+                    row.index = [next_index]
+                else:
+                    row = exog_ctx.iloc[[-1]].copy()
+                    row.index = [next_index]
+                exog_ctx = pd.concat([exog_ctx, row]).tail(min_context)
         
         return pd.Series(predictions, name='forecast')
+
+    def get_prediction_intervals(self, predictions: Optional[pd.Series] = None,
+                                 z: float = 1.96) -> Optional[Tuple[pd.Series, pd.Series]]:
+        if self._residual_std is None or predictions is None:
+            return None
+        return predictions - z * self._residual_std, predictions + z * self._residual_std
 
 
 class ModelEvaluator:
@@ -911,9 +1158,55 @@ class ModelEvaluator:
         return pd.DataFrame(results).sort_values('RMSE')
 
 
+class NaiveForecaster(BaseForecaster):
+    """Last-value (random walk) baseline."""
+
+    def __init__(self):
+        super().__init__("naive")
+
+    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+        data = pd.to_numeric(data, errors='coerce').dropna()
+        self._fit_series = data
+        self.is_fitted = True
+        return {'last_value': float(data.iloc[-1]) if len(data) else None}
+
+    def predict(self, steps: int, **kwargs) -> pd.Series:
+        if not self.is_fitted or self._fit_series is None or len(self._fit_series) == 0:
+            raise ValueError("Model must be fitted first")
+        last = float(self._fit_series.iloc[-1])
+        return pd.Series([last] * steps, name='forecast')
+
+
+class SeasonalNaiveForecaster(BaseForecaster):
+    """Seasonal naive baseline (repeat last season)."""
+
+    def __init__(self, season_length: int = 7):
+        super().__init__("seasonal_naive")
+        self.season_length = max(1, int(season_length))
+
+    def fit(self, data: pd.Series, **kwargs) -> Dict[str, Any]:
+        data = pd.to_numeric(data, errors='coerce').dropna()
+        self._fit_series = data
+        self.is_fitted = True
+        return {'season_length': self.season_length}
+
+    def predict(self, steps: int, **kwargs) -> pd.Series:
+        if not self.is_fitted or self._fit_series is None or len(self._fit_series) == 0:
+            raise ValueError("Model must be fitted first")
+        season = self._fit_series.tail(self.season_length).values
+        preds = [float(season[i % len(season)]) for i in range(steps)]
+        return pd.Series(preds, name='forecast')
+
+
 # Factory function to create models
 def create_forecaster(model_type: str, **kwargs) -> BaseForecaster:
     """Create a forecaster instance"""
+    aliases = {
+        'ridge_regression': 'ridge',
+        'lasso_regression': 'lasso',
+        'polynomial_regression': 'linear_regression',
+    }
+    model_type = aliases.get(model_type, model_type)
     model_map = {
         'arima': ARIMAForecaster,
         'ets': ETSForecaster,
@@ -927,6 +1220,8 @@ def create_forecaster(model_type: str, **kwargs) -> BaseForecaster:
         'neural_network': lambda **k: MLForecaster('neural_network', **k),
         'xgboost': XGBoostForecaster,
         'lightgbm': LightGBMForecaster,
+        'naive': NaiveForecaster,
+        'seasonal_naive': SeasonalNaiveForecaster,
     }
     
     if model_type not in model_map:
@@ -948,13 +1243,18 @@ def create_forecaster(model_type: str, **kwargs) -> BaseForecaster:
             else:
                 coerced[k] = v
         kwargs = coerced
+    if model_type == 'seasonal_naive':
+        allowed = {'season_length'}
+        kwargs = {k: v for k, v in kwargs.items() if k in allowed}
     if model_type == 'arima':
-        allowed = {'order', 'seasonal_order'}
+        allowed = {'order', 'seasonal_order', 'use_auto_arima'}
         coerced: Dict[str, Any] = {}
         for k, v in kwargs.items():
             if k not in allowed:
                 continue
-            if isinstance(v, str):
+            if k == 'use_auto_arima':
+                coerced[k] = bool(v)
+            elif isinstance(v, str):
                 s = v.strip().strip('()').strip('[]')
                 parts = [p for p in s.split(',') if p.strip() != '']
                 try:

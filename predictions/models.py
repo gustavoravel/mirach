@@ -13,10 +13,13 @@ class PredictionModel(models.Model):
         ('lstm', 'LSTM'),
         ('linear_regression', 'Regressão Linear'),
         ('polynomial_regression', 'Regressão Polinomial'),
+        ('ridge', 'Regressão Ridge'),
+        ('lasso', 'Regressão Lasso'),
         ('ridge_regression', 'Regressão Ridge'),
         ('lasso_regression', 'Regressão Lasso'),
         ('random_forest', 'Random Forest'),
         ('xgboost', 'XGBoost'),
+        ('lightgbm', 'LightGBM'),
         ('svr', 'Support Vector Regression'),
         ('neural_network', 'Rede Neural'),
     ]
