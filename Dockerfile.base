@@ -1,0 +1,61 @@
+# Heavy base image: Python deps + CmdStan for Prophet.
+# Built by GitHub Actions and pushed to GHCR so Railway never compiles CmdStan.
+# Rebuild only when this file or requirements.txt change.
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    CMDSTAN=/opt/cmdstan \
+    # Limit parallel compile jobs to reduce OOM on small runners
+    MAKEFLAGS="-j2"
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libgomp1 \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt ./
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Prophet ships an incomplete CmdStan tree in the wheel. Replace with a full build.
+RUN python - <<'PY'
+from pathlib import Path
+import shutil
+import cmdstanpy
+
+stan_model = Path("/usr/local/lib/python3.11/site-packages/prophet/stan_model")
+for d in stan_model.glob("cmdstan-*"):
+    if d.is_dir():
+        print(f"Removing incomplete bundled CmdStan: {d}")
+        shutil.rmtree(d)
+
+print("Installing CmdStan 2.33.1 ...")
+ok = cmdstanpy.install_cmdstan(
+    version="2.33.1",
+    dir="/opt",
+    overwrite=True,
+    verbose=True,
+    progress=False,
+)
+if not ok:
+    raise SystemExit("cmdstanpy.install_cmdstan failed")
+
+installed = Path(cmdstanpy.cmdstan_path())
+print(f"CmdStan installed at {installed}")
+
+target = stan_model / installed.name
+if target.exists():
+    shutil.rmtree(target)
+shutil.copytree(installed, target)
+print(f"CmdStan mirrored for Prophet at {target}")
+PY
+
+# Keep toolchain for any runtime Stan model compiles Prophet may trigger
+# (libgomp already installed). App code is NOT in this image.
+LABEL org.opencontainers.image.description="Mirach base with Prophet/CmdStan 2.33.1"
