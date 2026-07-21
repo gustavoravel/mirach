@@ -31,7 +31,11 @@ def _fallback_insights(context: Dict[str, Any]) -> Dict[str, Any]:
     horizon = context.get('horizon')
     slope = context.get('forecast_slope')
     beats = context.get('beats_baseline')
-    parts = [f"Previsão com {algo}"]
+    noun = context.get('forecast_noun') or 'previsão'
+    domain = context.get('domain')
+    parts = [f"Previsão de {noun} com {algo}"]
+    if domain:
+        parts.append(f"domínio {domain}")
     if horizon:
         parts.append(f"horizonte {horizon}")
     if metrics.get('rmse') is not None:
@@ -44,14 +48,14 @@ def _fallback_insights(context: Dict[str, Any]) -> Dict[str, Any]:
     drivers = []
     if slope is not None:
         direction = 'alta' if slope > 0 else ('queda' if slope < 0 else 'estável')
-        drivers.append(f"Tendência do forecast aponta {direction} (slope≈{slope:.4g}).")
+        drivers.append(f"Tendência da {noun} aponta {direction} (slope≈{slope:.4g}).")
     risks = []
     if beats is False:
         risks.append("O modelo não superou o baseline naive no campeonato — interprete com cautela.")
     if not metrics:
         risks.append("Métricas de holdout indisponíveis.")
     next_steps = [
-        "Compare com um baseline naive/seasonal naive.",
+        f"Compare a {noun} com um baseline naive/seasonal naive.",
         "Revise features exógenas mapeadas e qualidade dos gaps temporais.",
     ]
     return InsightReport(
@@ -78,11 +82,12 @@ def generate_insights(prediction) -> Dict[str, Any]:
             for k, v in sorted(fi.items(), key=lambda x: abs(float(x[1])), reverse=True)[:8]
         ]
 
-    domain = None
+    domain_meta = None
     try:
-        domain = (prediction.dataset.ai_interpretation or {}).get('inferred_domain')
+        from predictions.domains import resolve_dataset_domain
+        domain_meta = resolve_dataset_domain(prediction.dataset)
     except Exception:
-        pass
+        domain_meta = None
 
     slope = _forecast_slope([float(x) for x in forecast]) if forecast else None
     mean_fc = float(np.mean(forecast)) if forecast else None
@@ -95,7 +100,11 @@ def generate_insights(prediction) -> Dict[str, Any]:
         'forecast_mean': mean_fc,
         'forecast_slope': slope,
         'top_features': top_features,
-        'domain': domain,
+        'domain': (domain_meta or {}).get('label'),
+        'domain_code': (domain_meta or {}).get('code'),
+        'target_vocabulary': (domain_meta or {}).get('target_vocabulary'),
+        'forecast_noun': (domain_meta or {}).get('forecast_noun'),
+        'domain_guidance': (domain_meta or {}).get('agent_guidance'),
         'beats_baseline': explain.get('beats_baseline'),
         'championship': explain.get('championship'),
         # Do NOT send full forecast series to LLM — only aggregates
@@ -109,12 +118,15 @@ def generate_insights(prediction) -> Dict[str, Any]:
         "Você é um analista de séries temporais. Escreva insights em português (pt-BR) "
         "estritamente ancorados nos números fornecidos. "
         "NUNCA invente valores de previsão, métricas ou percentuais que não estejam no contexto. "
+        "Personalize a linguagem ao domínio informado (ex.: demanda no varejo, tráfego web, "
+        "produção industrial, volume logístico). "
         "Responda só em JSON no schema pedido."
     )
     user = (
         "Contexto da previsão (agregados reais calculados pelo sistema):\n"
         f"{json.dumps(context, ensure_ascii=False, default=str)}\n\n"
-        "Produza summary, drivers, risks e next_steps úteis para o usuário de negócio."
+        "Produza summary, drivers, risks e next_steps úteis para o usuário de negócio, "
+        f"usando o vocabulário de {(domain_meta or {}).get('target_vocabulary') or 'série temporal'}."
     )
     parsed = chat_structured(
         system=system,

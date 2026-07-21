@@ -150,7 +150,9 @@
         <div>
             <h2><i class="fas fa-chart-line me-2 text-primary"></i>Resultados e Exploração</h2>
             <p class="subtitle">
-                {{ prediction.name }} · {{ prediction.prediction_model.name }} ·
+                {{ prediction.name }} · {{ prediction.prediction_model.name }}
+                {% if domain %} · <span class="ai-chip"><i class="fas fa-tags"></i>{{ domain.label }}</span>{% endif %}
+                ·
                 <span class="badge bg-{% if prediction.status == 'completed' %}success{% elif prediction.status == 'failed' %}danger{% else %}secondary{% endif %}">{{ prediction.get_status_display }}</span>
             </p>
         </div>
@@ -209,6 +211,27 @@
             </div>
         </div>
     </div>
+
+    {% if domain %}
+    <div class="ai-panel mb-4">
+        <div class="ai-panel-header">
+            <span class="ai-avatar"><i class="fas fa-tags"></i></span>
+            Domínio {{ domain.label }}
+            <span class="ai-chip ms-auto">{{ domain.code }}</span>
+        </div>
+        <div class="ai-panel-body">
+            <p class="small mb-2">{{ domain.description }}</p>
+            <div class="small text-muted mb-2">Vocabulário do alvo: <strong>{{ domain.target_vocabulary }}</strong></div>
+            {% if domain.result_tips %}
+            <ul class="ai-insight-list mb-0">
+              {% for tip in domain.result_tips %}
+              <li><i class="fas fa-lightbulb"></i><span>{{ tip }}</span></li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Controls -->
     <div class="card mb-4">
@@ -414,6 +437,8 @@
                                         <dd class="col-7" id="model-algorithm">—</dd>
                                         <dt class="col-5 text-muted">Nome</dt>
                                         <dd class="col-7" id="model-name">—</dd>
+                                        <dt class="col-5 text-muted">Domínio</dt>
+                                        <dd class="col-7" id="model-domain">—</dd>
                                         <dt class="col-5 text-muted">Horizonte</dt>
                                         <dd class="col-7" id="model-horizon">—</dd>
                                         <dt class="col-5 text-muted">Pontos previstos</dt>
@@ -702,6 +727,12 @@
         updateSummary() {
             document.getElementById('model-algorithm').textContent = this.raw.model_algorithm || '—';
             document.getElementById('model-name').textContent = this.raw.model_name || '—';
+            const domainEl = document.getElementById('model-domain');
+            if (domainEl) {
+                domainEl.textContent = (this.raw.domain && this.raw.domain.label)
+                    ? `${this.raw.domain.label} (${this.raw.domain.code || ''})`
+                    : '—';
+            }
             document.getElementById('model-horizon').textContent = this.raw.prediction_horizon ?? '—';
             document.getElementById('model-forecast-n').textContent = this.results.length;
 

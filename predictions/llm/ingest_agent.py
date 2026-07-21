@@ -23,17 +23,35 @@ def _fallback_interpretation(df: pd.DataFrame, profile: Dict[str, Any]) -> Dict[
     target = next((c for c, t in suggestions.items() if t == 'target'), None)
     features = [c for c, t in suggestions.items() if t == 'feature']
     ignore = [c for c, t in suggestions.items() if t == 'ignore']
-    return DatasetInterpretation(
+
+    from predictions.domains import DOMAINS, DOMAIN_CUSTOM, enrich_interpretation_with_domain
+
+    # Heuristic domain from column name hints
+    cols_blob = ' '.join(str(c).lower() for c in (df.columns or []))
+    guessed = DOMAIN_CUSTOM
+    best_hits = 0
+    for code, meta in DOMAINS.items():
+        if code == DOMAIN_CUSTOM:
+            continue
+        hints = (meta.get('target_hints') or []) + (meta.get('related_hints') or [])
+        hits = sum(1 for h in hints if h in cols_blob)
+        if hits > best_hits:
+            best_hits = hits
+            guessed = code
+
+    result = DatasetInterpretation(
         timestamp_column=timestamp,
         target_column=target,
         feature_columns=features,
         ignore_columns=ignore,
         dayfirst=bool(profile.get('dayfirst', True)),
         inferred_frequency=profile.get('inferred_freq'),
-        inferred_domain=None,
+        inferred_domain=guessed,
+        domain_code=guessed,
         issues=list(profile.get('warnings') or []),
         confidence=0.4,
     ).model_dump()
+    return enrich_interpretation_with_domain(result)
 
 
 def _compact_profile_for_llm(profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -82,7 +100,8 @@ def suggest_column_mappings(dataset) -> Optional[Dict[str, Any]]:
     ).hexdigest()[:32]
     cached = cache.get(cache_key)
     if cached:
-        return cached
+        from predictions.domains import enrich_interpretation_with_domain
+        return enrich_interpretation_with_domain(cached)
 
     if not is_nim_available():
         result = _fallback_interpretation(df, profile)
@@ -93,14 +112,17 @@ def suggest_column_mappings(dataset) -> Optional[Dict[str, Any]]:
         "Você é um especialista em séries temporais. Analise o perfil compacto "
         "de um dataset e sugira mapeamento de colunas. "
         "Nunca invente dados numéricos. Responda só em JSON. "
-        "Todo texto explicativo (reason, issues, inferred_domain) deve estar em português (pt-BR)."
+        "Todo texto explicativo (reason, issues) deve estar em português (pt-BR). "
+        "Para o domínio, escolha UM código entre: RETAIL, INVENTORY_PLANNING, "
+        "WORK_FORCE, WEB_TRAFFIC, METRICS, MANUFACTURING, LOGISTICS, CUSTOM "
+        "(inspirado nos domínios do Amazon Forecast)."
     )
     user = (
         "Perfil do dataset:\n"
         f"{json.dumps(compact, ensure_ascii=False, default=str)}\n\n"
         "Identifique timestamp, target, features e colunas a ignorar. "
         "Indique date_format (ex: %d/%m/%Y), dayfirst, inferred_frequency, "
-        "inferred_domain (ex: varejo, manufatura) e issues. "
+        "inferred_domain (código canônico do domínio) e issues. "
         "Escreva reasons e issues em português."
     )
     parsed = chat_structured(
@@ -124,6 +146,9 @@ def suggest_column_mappings(dataset) -> Optional[Dict[str, Any]]:
             dataset.save(update_fields=['data_profile'])
         except Exception:
             pass
+
+    from predictions.domains import enrich_interpretation_with_domain
+    result = enrich_interpretation_with_domain(result)
 
     cache.set(cache_key, result, 3600)
     return result

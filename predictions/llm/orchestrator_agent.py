@@ -86,7 +86,9 @@ def plan_model(dataset_id: int) -> Dict[str, Any]:
             'columns': profile.get('columns') or ds.column_names,
             'inferred_freq': profile.get('inferred_freq'),
             'warnings': profile.get('warnings'),
-            'domain': (ds.ai_interpretation or {}).get('inferred_domain'),
+            'domain': (ds.ai_interpretation or {}).get('domain_label')
+                or (ds.ai_interpretation or {}).get('inferred_domain'),
+            'domain_code': (ds.ai_interpretation or {}).get('domain_code'),
             'has_exog': exog is not None,
             'n_points': len(series),
         }
@@ -142,6 +144,9 @@ def plan_model(dataset_id: int) -> Dict[str, Any]:
     if not is_nim_available():
         return fallback
 
+    from predictions.domains import resolve_dataset_domain
+    domain_meta = resolve_dataset_domain(dataset)
+
     system = (
         "Você é um orquestrador de modelagem de séries temporais. "
         "Use as tools para inspecionar o dataset e o campeonato. "
@@ -150,12 +155,16 @@ def plan_model(dataset_id: int) -> Dict[str, Any]:
         "IMPORTANTE: todo texto voltado ao usuário (especialmente o campo rationale) "
         "deve ser escrito em português do Brasil (pt-BR). "
         "Não use inglês no rationale. "
+        f"Domínio do dataset: {domain_meta['code']} ({domain_meta['label']}). "
+        f"Orientação setorial: {domain_meta.get('agent_guidance', '')} "
+        f"Vocabulário do alvo: {domain_meta.get('target_vocabulary', 'série alvo')}. "
         "Resposta final: JSON ModelPlan com language=\"pt-BR\"."
     )
     user = (
-        f"Dataset id={dataset_id}. Planeje o melhor algoritmo para previsão. "
+        f"Dataset id={dataset_id}, domínio={domain_meta['code']}. "
+        "Planeje o melhor algoritmo para previsão. "
         "Chame run_championship se necessário e então emita o ModelPlan. "
-        "Escreva o rationale em português (pt-BR), de forma clara e objetiva para o usuário."
+        "Escreva o rationale em português (pt-BR), mencionando o contexto do domínio."
     )
     parsed = tool_calling_loop(
         system=system,

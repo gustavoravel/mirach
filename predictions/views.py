@@ -145,7 +145,15 @@ def prediction_detail(request, pk):
     if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
         messages.error(request, 'Acesso negado a esta previsão.')
         return redirect('predictions:list')
-    return render(request, 'predictions/detail.html', {'prediction': prediction})
+    from .domains import get_domain, resolve_dataset_domain
+    domain = resolve_dataset_domain(prediction.dataset)
+    expl = prediction.explainability if isinstance(prediction.explainability, dict) else {}
+    if expl.get('domain_code'):
+        domain = get_domain(expl.get('domain_code'))
+    return render(request, 'predictions/detail.html', {
+        'prediction': prediction,
+        'domain': domain,
+    })
 
 
 @login_required
@@ -297,6 +305,7 @@ def prediction_wizard(request):
             horizon = int(request.POST.get('prediction_horizon', 12))
             name = request.POST.get('name', 'Nova Previsão')
             params_json = request.POST.get('params_json', '').strip()
+            domain_code = (request.POST.get('domain_code') or '').strip()
 
             project = get_object_or_404(Project, pk=state['project'], owner=request.user)
             dataset = get_object_or_404(Dataset, pk=state['dataset'], project__owner=request.user)
@@ -313,6 +322,25 @@ def prediction_wizard(request):
                         model_parameters.update(overrides)
                 except Exception:
                     messages.warning(request, 'Hiperparâmetros inválidos (JSON). Usando padrões do modelo.')
+
+            from .domains import enrich_interpretation_with_domain, resolve_dataset_domain
+            if domain_code:
+                interp = dict(dataset.ai_interpretation or {})
+                interp['domain_code'] = domain_code
+                interp['inferred_domain'] = domain_code
+                dataset.ai_interpretation = enrich_interpretation_with_domain(interp)
+                dataset.save(update_fields=['ai_interpretation'])
+            domain_meta = resolve_dataset_domain(dataset)
+
+            explainability = {
+                'domain_code': domain_meta['code'],
+                'domain_label': domain_meta['label'],
+            }
+            if auto_plan:
+                explainability['auto_plan'] = {
+                    'rationale': auto_plan.get('rationale'),
+                    'beats_baseline': auto_plan.get('beats_baseline'),
+                }
             prediction = Prediction.objects.create(
                 name=name,
                 project=project,
@@ -324,12 +352,7 @@ def prediction_wizard(request):
                 test_size=1.0 - train_size - validation_size,
                 model_parameters=model_parameters,
                 created_by=request.user,
-                explainability={
-                    'auto_plan': {
-                        'rationale': auto_plan.get('rationale'),
-                        'beats_baseline': auto_plan.get('beats_baseline'),
-                    }
-                } if auto_plan else {},
+                explainability=explainability,
             )
             # Store championship summary for narrative
             if auto_plan.get('championship'):
@@ -351,12 +374,29 @@ def prediction_wizard(request):
         models = PredictionModel.objects.filter(is_active=True, algorithm_type__in=ALLOWED_FREE_MODELS)
     else:
         models = PredictionModel.objects.filter(is_active=True)
+
+    from .domains import domain_presets, resolve_dataset_domain
+    selected_domain = None
+    selected_domain_params = {}
+    presets = domain_presets()
+    if state.get('dataset'):
+        try:
+            ds = Dataset.objects.get(pk=state['dataset'], project__owner=request.user)
+            selected_domain = resolve_dataset_domain(ds)
+            selected_domain_params = (selected_domain.get('preset') or {}).get('parameters') or {}
+        except Dataset.DoesNotExist:
+            selected_domain = None
+
     context = {
         'step': step,
         'projects': projects,
         'datasets': datasets,
         'models': models,
         'state': state,
+        'domain_presets': presets,
+        'selected_domain': selected_domain,
+        'domain_presets_data': presets,
+        'selected_domain_params': selected_domain_params,
     }
     context.update({'plan_code': (sub.plan.code if sub else 'free'), 'allowed_free': ALLOWED_FREE_MODELS})
     return render(request, 'predictions/wizard.html', context)
@@ -741,6 +781,11 @@ def prediction_explore_interactive(request, pk):
             feature_importance = {}
     
     # Prepare data for the interactive page
+    from .domains import get_domain, resolve_dataset_domain
+    domain_meta = resolve_dataset_domain(prediction.dataset)
+    if explain.get('domain_code'):
+        domain_meta = get_domain(explain.get('domain_code'))
+
     prediction_data = {
         'historical_data': [],
         'results': [],
@@ -752,6 +797,14 @@ def prediction_explore_interactive(request, pk):
         'ai_insights': explain.get('ai_insights') or {},
         'prediction_horizon': prediction.prediction_horizon,
         'prediction_name': prediction.name,
+        'domain': {
+            'code': domain_meta.get('code'),
+            'label': domain_meta.get('label'),
+            'description': domain_meta.get('description'),
+            'target_vocabulary': domain_meta.get('target_vocabulary'),
+            'forecast_noun': domain_meta.get('forecast_noun'),
+            'result_tips': domain_meta.get('result_tips') or [],
+        },
     }
     
     # Load historical data from dataset
@@ -828,4 +881,5 @@ def prediction_explore_interactive(request, pk):
     return render(request, 'predictions/explore_interactive.html', {
         'prediction': prediction,
         'prediction_data': prediction_data,
+        'domain': domain_meta,
     })

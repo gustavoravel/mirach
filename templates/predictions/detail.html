@@ -11,6 +11,9 @@
         <p class="text-muted mb-0">
             <strong>Modelo:</strong> {{ prediction.prediction_model.name }} | 
             <strong>Dataset:</strong> {{ prediction.dataset.name }} |
+            {% if domain %}
+            <strong>Domínio:</strong> <span class="ai-chip"><i class="fas fa-tags"></i>{{ domain.label }}</span> |
+            {% endif %}
             <strong>Status:</strong> 
             <span class="badge bg-{% if prediction.status == 'completed' %}success{% elif prediction.status == 'training' %}warning{% elif prediction.status == 'failed' %}danger{% else %}secondary{% endif %}">
                 {{ prediction.get_status_display }}
@@ -53,6 +56,13 @@
                     <strong>Algoritmo:</strong><br>
                     <span class="text-muted">{{ prediction.prediction_model.name }}</span>
                 </div>
+                {% if domain %}
+                <div class="info-item mb-3">
+                    <strong>Domínio:</strong><br>
+                    <span class="ai-chip"><i class="fas fa-tags"></i>{{ domain.label }}</span>
+                    <div class="small text-muted mt-1">{{ domain.description }}</div>
+                </div>
+                {% endif %}
                 <div class="info-item mb-3">
                     <strong>Horizonte:</strong><br>
                     <span class="text-muted">{{ prediction.prediction_horizon }} períodos</span>
@@ -170,6 +180,7 @@
                 <div class="ai-panel-header">
                     <span class="ai-avatar"><i class="fas fa-robot"></i></span>
                     Análise do agente Mirach
+                    {% if domain %}<span class="ai-chip ms-2">{{ domain.label }}</span>{% endif %}
                     <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
                 </div>
                 <div class="ai-panel-body">
@@ -206,6 +217,32 @@
                         </div>
                         {% endif %}
                     </div>
+                    {% if domain.result_tips %}
+                    <hr class="my-3">
+                    <div class="mb-1 fw-bold small text-uppercase text-muted">Dicas do domínio {{ domain.label }}</div>
+                    <ul class="ai-insight-list mb-0">
+                      {% for tip in domain.result_tips %}
+                      <li><i class="fas fa-lightbulb"></i><span>{{ tip }}</span></li>
+                      {% endfor %}
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif domain %}
+            <div class="ai-panel mb-4">
+                <div class="ai-panel-header">
+                    <span class="ai-avatar"><i class="fas fa-tags"></i></span>
+                    Contexto do domínio {{ domain.label }}
+                </div>
+                <div class="ai-panel-body">
+                    <p class="small mb-2">{{ domain.description }}</p>
+                    {% if domain.result_tips %}
+                    <ul class="ai-insight-list mb-0">
+                      {% for tip in domain.result_tips %}
+                      <li><i class="fas fa-lightbulb"></i><span>{{ tip }}</span></li>
+                      {% endfor %}
+                    </ul>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

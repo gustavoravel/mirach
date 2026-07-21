@@ -249,7 +249,21 @@ class PredictionService:
                     'end': str(target_series.index[-1]),
                     'count': len(target_series)
                 }
-            prediction.explainability = explanation
+            # Merge explainability — keep domain / auto_plan / championship from wizard
+            prev_expl = prediction.explainability if isinstance(prediction.explainability, dict) else {}
+            merged = dict(prev_expl)
+            if isinstance(explanation, dict):
+                merged.update(explanation)
+            # Ensure domain is present from dataset if missing
+            if not merged.get('domain_code'):
+                try:
+                    from predictions.domains import resolve_dataset_domain
+                    dom = resolve_dataset_domain(prediction.dataset)
+                    merged['domain_code'] = dom.get('code')
+                    merged['domain_label'] = dom.get('label')
+                except Exception:
+                    pass
+            prediction.explainability = merged
             prediction.save()
             # Webhook notification
             try:

@@ -24,7 +24,16 @@ class DatasetInterpretation(BaseModel):
     inferred_frequency: Optional[str] = None
     inferred_domain: Optional[str] = Field(
         default=None,
-        description="Domínio inferido em português (ex: varejo, manufatura)",
+        description=(
+            "Domínio do dataset. Use um código canônico: "
+            "RETAIL, INVENTORY_PLANNING, WORK_FORCE, WEB_TRAFFIC, METRICS, "
+            "MANUFACTURING, LOGISTICS ou CUSTOM. "
+            "Também aceita rótulos em português (varejo, manufatura, etc.)."
+        ),
+    )
+    domain_code: Optional[str] = Field(
+        default=None,
+        description="Código canônico do domínio (mesmo conjunto de inferred_domain)",
     )
     issues: List[str] = Field(
         default_factory=list,

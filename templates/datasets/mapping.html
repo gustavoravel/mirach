@@ -47,6 +47,23 @@
   <div class="card-body">
     <form method="post">
       {% csrf_token %}
+
+      <div class="mb-4">
+        <label class="form-label" for="domain_code">Domínio do dataset</label>
+        <select name="domain_code" id="domain_code" class="form-select" required>
+          {% for d in domain_choices %}
+          <option value="{{ d.code }}" {% if current_domain.code == d.code %}selected{% endif %}>{{ d.label }} ({{ d.code }})</option>
+          {% endfor %}
+        </select>
+        {% if current_domain.description %}
+        <div class="form-text">{{ current_domain.description }}</div>
+        {% endif %}
+        <div class="form-text">
+          Inspirado nos <a href="https://docs.aws.amazon.com/forecast/latest/dg/howitworks-domains-ds-types.html" target="_blank" rel="noopener">domínios do Amazon Forecast</a>
+          (target time series, related series e metadados).
+        </div>
+      </div>
+
       <div class="table-responsive">
         <table class="table table-sm align-middle">
           <thead>
@@ -63,8 +80,8 @@
                 <select name="column_type_{{ item.name }}" class="form-select form-select-sm" required>
                   <option value="ignore" {% if item.type == 'ignore' %}selected{% endif %}>Ignorar</option>
                   <option value="timestamp" {% if item.type == 'timestamp' %}selected{% endif %}>Timestamp/Data</option>
-                  <option value="target" {% if item.type == 'target' %}selected{% endif %}>Variável Alvo</option>
-                  <option value="feature" {% if item.type == 'feature' %}selected{% endif %}>Variável Explicativa</option>
+                  <option value="target" {% if item.type == 'target' %}selected{% endif %}>Variável Alvo (target time series)</option>
+                  <option value="feature" {% if item.type == 'feature' %}selected{% endif %}>Variável Explicativa (related / metadata)</option>
                 </select>
               </td>
             </tr>

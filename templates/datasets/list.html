@@ -29,8 +29,8 @@
                     <div class="small text-muted mb-2">
                         <i class="fas fa-table me-1"></i>{{ dataset.total_rows|default:"—" }} linhas · {{ dataset.total_columns|default:"—" }} colunas
                     </div>
-                    {% if dataset.ai_interpretation.inferred_domain %}
-                    <span class="ai-chip mb-2"><i class="fas fa-robot"></i>{{ dataset.ai_interpretation.inferred_domain }}</span>
+                    {% if dataset.ai_interpretation.domain_label or dataset.ai_interpretation.inferred_domain %}
+                    <span class="ai-chip mb-2"><i class="fas fa-tags"></i>{{ dataset.ai_interpretation.domain_label|default:dataset.ai_interpretation.inferred_domain }}</span>
                     {% endif %}
                     {% if dataset.description %}
                         <p class="card-text text-muted small mb-0">{{ dataset.description|truncatechars:100 }}</p>

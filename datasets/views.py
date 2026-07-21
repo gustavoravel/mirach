@@ -227,6 +227,16 @@ def column_mapping(request, pk):
             )
             mapping.column_type = value
             mapping.save()
+
+        # Persist / override domain selection
+        domain_code = (request.POST.get('domain_code') or '').strip()
+        if domain_code:
+            from predictions.domains import enrich_interpretation_with_domain
+            interp = dict(dataset.ai_interpretation or {})
+            interp['domain_code'] = domain_code
+            interp['inferred_domain'] = domain_code
+            dataset.ai_interpretation = enrich_interpretation_with_domain(interp)
+            dataset.save(update_fields=['ai_interpretation'])
         
         messages.success(request, 'Mapeamento de colunas salvo com sucesso!')
         return redirect('datasets:detail', pk=dataset.pk)
@@ -235,11 +245,20 @@ def column_mapping(request, pk):
     ai_suggestion = dataset.ai_interpretation or {}
     try:
         from predictions.llm.ingest_agent import suggest_column_mappings
+        from predictions.domains import enrich_interpretation_with_domain
         if not ai_suggestion:
             ai_suggestion = suggest_column_mappings(dataset) or {}
             if ai_suggestion:
-                dataset.ai_interpretation = ai_suggestion
+                dataset.ai_interpretation = enrich_interpretation_with_domain(ai_suggestion)
                 dataset.save(update_fields=['ai_interpretation'])
+                ai_suggestion = dataset.ai_interpretation
+        else:
+            # Normalize legacy free-text domains
+            enriched = enrich_interpretation_with_domain(ai_suggestion)
+            if enriched != ai_suggestion:
+                dataset.ai_interpretation = enriched
+                dataset.save(update_fields=['ai_interpretation'])
+                ai_suggestion = enriched
         # Always merge AI / heuristic suggestions for missing columns
         if ai_suggestion:
             _apply_ai_mappings(dataset, ai_suggestion, only_missing=True)
@@ -257,11 +276,16 @@ def column_mapping(request, pk):
         {'name': col, 'type': mapping_by_column.get(col, 'ignore')}
         for col in (dataset.column_names or [])
     ]
+
+    from predictions.domains import domain_choices, resolve_dataset_domain
+    domain_meta = resolve_dataset_domain(dataset)
     
     return render(request, 'datasets/mapping.html', {
         'dataset': dataset,
         'ai_interpretation': ai_suggestion,
         'columns_with_types': columns_with_types,
+        'domain_choices': domain_choices(),
+        'current_domain': domain_meta,
     })
 
 
