@@ -70,9 +70,11 @@ class PredictionService:
             if not timestamp_col or not target_col:
                 raise ValueError("Timestamp and target columns must be mapped")
             
-            # Convert timestamp column (prefer BR dayfirst when indicated)
-            df[timestamp_col] = pd.to_datetime(
-                df[timestamp_col], errors='coerce', dayfirst=bool(dayfirst)
+            # Convert timestamp column (prefer BR dayfirst when indicated).
+            # Year-only integers (e.g. 2001) must not go through generic to_datetime —
+            # pandas treats them as nanoseconds since epoch.
+            df[timestamp_col] = self._parse_timestamp_column(
+                df[timestamp_col], dayfirst=bool(dayfirst)
             )
             df = df.dropna(subset=[timestamp_col])
             df = df.set_index(timestamp_col)
@@ -94,17 +96,41 @@ class PredictionService:
             if feature_cols:
                 present = [c for c in feature_cols if c in df.columns]
                 if present:
-                    exog_df = df.loc[target_series.index, present].apply(pd.to_numeric, errors='coerce')
-                    exog_df = exog_df.ffill().bfill()
-                    # Drop all-null columns
-                    exog_df = exog_df.dropna(axis=1, how='all')
-                    if exog_df.shape[1] == 0:
+                    # Force float64 — mixed bool/int/float .values become object and
+                    # break statsmodels SARIMAX ("numpy dtype of object").
+                    exog_df = self._coerce_exog_frame(df.loc[target_series.index, present])
+                    if exog_df is not None and exog_df.shape[1] == 0:
                         exog_df = None
             
             return target_series, exog_df
             
         except Exception as e:
             raise ValueError(f"Data preparation failed: {str(e)}")
+
+    @staticmethod
+    def _parse_timestamp_column(series: pd.Series, *, dayfirst: bool = True) -> pd.Series:
+        """Parse timestamps; treat year-only integers (1900–2100) as calendar years."""
+        numeric = pd.to_numeric(series, errors='coerce')
+        if numeric.notna().sum() >= max(1, int(0.8 * len(series))):
+            vmin, vmax = float(numeric.min()), float(numeric.max())
+            if 1900 <= vmin <= 2100 and 1900 <= vmax <= 2100 and (vmax - vmin) < 500:
+                years = numeric.round().astype('Int64').astype(str)
+                return pd.to_datetime(years, format='%Y', errors='coerce')
+        return pd.to_datetime(series, errors='coerce', dayfirst=bool(dayfirst))
+
+    @staticmethod
+    def _coerce_exog_frame(frame: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Coerce exogenous features to float64 (bool→0/1). Drop all-null columns."""
+        if frame is None or frame.empty:
+            return None
+        coerced = frame.apply(pd.to_numeric, errors='coerce')
+        # Booleans become 0/1 via to_numeric; ensure uniform float64 for SARIMAX/Prophet
+        coerced = coerced.astype('float64')
+        coerced = coerced.ffill().bfill()
+        coerced = coerced.dropna(axis=1, how='all')
+        if coerced.shape[1] == 0:
+            return None
+        return coerced
     
     def split_data(self, data: pd.Series, train_size: float = 0.8, 
                    validation_size: float = 0.1,

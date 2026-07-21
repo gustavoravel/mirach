@@ -215,14 +215,23 @@ class ARIMAForecaster(BaseForecaster):
             exog_aligned = None
             if exog is not None and len(exog) > 0:
                 exog_aligned = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce')
-                exog_aligned = exog_aligned.ffill().bfill()
-                self._exog_train = exog_aligned.copy()
+                exog_aligned = exog_aligned.astype('float64').ffill().bfill()
+                # Drop columns that are still all-NaN after coercion
+                exog_aligned = exog_aligned.dropna(axis=1, how='all')
+                if exog_aligned.shape[1] == 0:
+                    exog_aligned = None
+                else:
+                    self._exog_train = exog_aligned.copy()
 
             # Use a simple integer index to avoid backend issues comparing index types
-            data = pd.Series(data.values, index=pd.RangeIndex(start=0, stop=len(data), step=1), name=data.name)
+            data = pd.Series(
+                np.asarray(data.values, dtype=float),
+                index=pd.RangeIndex(start=0, stop=len(data), step=1),
+                name=data.name,
+            )
             if exog_aligned is not None:
                 exog_aligned = pd.DataFrame(
-                    exog_aligned.values,
+                    np.asarray(exog_aligned.to_numpy(dtype=float), dtype=float),
                     index=data.index,
                     columns=exog_aligned.columns,
                 )
@@ -362,12 +371,15 @@ class ProphetForecaster(BaseForecaster):
             self.model = Prophet(**self.prophet_kwargs)
             if exog is not None and len(exog) > 0:
                 exog_aligned = exog.reindex(data.index).apply(pd.to_numeric, errors='coerce')
-                exog_aligned = exog_aligned.ffill().bfill()
-                self._exog_train = exog_aligned.copy()
-                self._exog_cols = list(exog_aligned.columns)
-                for col in self._exog_cols:
-                    self.model.add_regressor(col)
-                    df[col] = exog_aligned[col].values
+                exog_aligned = exog_aligned.astype('float64').ffill().bfill().dropna(axis=1, how='all')
+                if exog_aligned.shape[1] == 0:
+                    exog_aligned = None
+                else:
+                    self._exog_train = exog_aligned.copy()
+                    self._exog_cols = list(exog_aligned.columns)
+                    for col in self._exog_cols:
+                        self.model.add_regressor(col)
+                        df[col] = np.asarray(exog_aligned[col], dtype=float)
 
             self.model.fit(df)
             self.is_fitted = True
