@@ -121,7 +121,8 @@ def tool_calling_loop(
             'content': (
                 f"{user}\n\n"
                 "Quando tiver informação suficiente, responda APENAS com JSON "
-                f"válido para: {schema.model_json_schema()}"
+                f"válido para: {schema.model_json_schema()}\n"
+                "Todo campo textual voltado ao usuário deve estar em português (pt-BR)."
             ),
         },
     ]
@@ -188,7 +189,8 @@ def tool_calling_loop(
                         'role': 'user',
                         'content': (
                             f"JSON inválido ({exc}). "
-                            "Retorne somente o objeto JSON final."
+                            "Retorne somente o objeto JSON final, "
+                            "com rationale e textos em português (pt-BR)."
                         ),
                     }
                 )

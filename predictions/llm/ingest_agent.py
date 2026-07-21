@@ -92,14 +92,16 @@ def suggest_column_mappings(dataset) -> Optional[Dict[str, Any]]:
     system = (
         "Você é um especialista em séries temporais. Analise o perfil compacto "
         "de um dataset e sugira mapeamento de colunas. "
-        "Nunca invente dados numéricos. Responda só em JSON."
+        "Nunca invente dados numéricos. Responda só em JSON. "
+        "Todo texto explicativo (reason, issues, inferred_domain) deve estar em português (pt-BR)."
     )
     user = (
         "Perfil do dataset:\n"
         f"{json.dumps(compact, ensure_ascii=False, default=str)}\n\n"
         "Identifique timestamp, target, features e colunas a ignorar. "
         "Indique date_format (ex: %d/%m/%Y), dayfirst, inferred_frequency, "
-        "inferred_domain (ex: varejo, manufatura) e issues."
+        "inferred_domain (ex: varejo, manufatura) e issues. "
+        "Escreva reasons e issues em português."
     )
     parsed = chat_structured(
         system=system,

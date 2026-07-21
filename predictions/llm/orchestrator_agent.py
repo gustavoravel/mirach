@@ -147,11 +147,15 @@ def plan_model(dataset_id: int) -> Dict[str, Any]:
         "Use as tools para inspecionar o dataset e o campeonato. "
         "Escolha algorithm e parameters conservadores. "
         "Nunca invente métricas — use apenas resultados das tools. "
-        "Resposta final: JSON ModelPlan."
+        "IMPORTANTE: todo texto voltado ao usuário (especialmente o campo rationale) "
+        "deve ser escrito em português do Brasil (pt-BR). "
+        "Não use inglês no rationale. "
+        "Resposta final: JSON ModelPlan com language=\"pt-BR\"."
     )
     user = (
         f"Dataset id={dataset_id}. Planeje o melhor algoritmo para previsão. "
-        "Chame run_championship se necessário e então emita o ModelPlan."
+        "Chame run_championship se necessário e então emita o ModelPlan. "
+        "Escreva o rationale em português (pt-BR), de forma clara e objetiva para o usuário."
     )
     parsed = tool_calling_loop(
         system=system,
@@ -165,6 +169,7 @@ def plan_model(dataset_id: int) -> Dict[str, Any]:
     if parsed is None:
         return fallback
     plan = parsed.model_dump()
+    plan['language'] = 'pt-BR'
     plan['_championship'] = {
         'ranking': champ_result.get('ranking'),
         'beats_baseline': champ_result.get('beats_baseline'),
