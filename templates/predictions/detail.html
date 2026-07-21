@@ -18,10 +18,10 @@
         </p>
     </div>
     <div class="btn-group">
-        {% if prediction.status == 'pending' %}
-            <a href="{% url 'predictions:run' prediction.pk %}" class="btn btn-primary">
-                <i class="fas fa-play"></i> Executar Previsão
-            </a>
+        {% if prediction.status == 'pending' or prediction.status == 'failed' %}
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#runPredictionModal">
+                <i class="fas fa-play"></i> {% if prediction.status == 'failed' %}Tentar Novamente{% else %}Executar Previsão{% endif %}
+            </button>
         {% elif prediction.status == 'completed' %}
             <a href="{% url 'predictions:explore_interactive' prediction.pk %}" class="btn btn-success">
                 <i class="fas fa-chart-bar"></i> Ver Resultados e Exploração
@@ -127,42 +127,6 @@
         {% endif %}
 
         {% if prediction.status == 'completed' and prediction.explainability %}
-        {% if prediction.explainability.ai_insights %}
-        <div class="ai-panel mb-4">
-            <div class="ai-panel-header">
-                <span class="ai-avatar"><i class="fas fa-robot"></i></span>
-                Análise do agente Mirach
-                <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
-            </div>
-            <div class="ai-panel-body">
-                <p class="mb-3">{{ prediction.explainability.ai_insights.summary }}</p>
-                {% if prediction.explainability.ai_insights.drivers %}
-                <div class="mb-1 fw-bold small text-uppercase text-muted">Drivers</div>
-                <ul class="ai-insight-list mb-3">
-                  {% for d in prediction.explainability.ai_insights.drivers %}
-                  <li><i class="fas fa-arrow-trend-up"></i><span>{{ d }}</span></li>
-                  {% endfor %}
-                </ul>
-                {% endif %}
-                {% if prediction.explainability.ai_insights.risks %}
-                <div class="mb-1 fw-bold small text-uppercase text-muted">Riscos</div>
-                <ul class="ai-insight-list mb-3">
-                  {% for r in prediction.explainability.ai_insights.risks %}
-                  <li><i class="fas fa-triangle-exclamation"></i><span>{{ r }}</span></li>
-                  {% endfor %}
-                </ul>
-                {% endif %}
-                {% if prediction.explainability.ai_insights.next_steps %}
-                <div class="mb-1 fw-bold small text-uppercase text-muted">Próximos passos</div>
-                <ul class="ai-insight-list mb-0">
-                  {% for s in prediction.explainability.ai_insights.next_steps %}
-                  <li><i class="fas fa-circle-check"></i><span>{{ s }}</span></li>
-                  {% endfor %}
-                </ul>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
         {% if prediction.explainability.feature_importances or prediction.explainability.coefficients %}
         <div class="card mb-4">
             <div class="card-header">
@@ -186,7 +150,7 @@
     <!-- Visualização -->
     <div class="col-lg-8">
         {% if prediction.status == 'completed' %}
-            <div class="card">
+            <div class="card mb-4">
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <h6 class="mb-0"><i class="fas fa-chart-line"></i> Gráfico de Previsão</h6>
@@ -200,6 +164,51 @@
                     <canvas id="predictionChart" height="400"></canvas>
                 </div>
             </div>
+
+            {% if prediction.explainability.ai_insights %}
+            <div class="ai-panel mb-4">
+                <div class="ai-panel-header">
+                    <span class="ai-avatar"><i class="fas fa-robot"></i></span>
+                    Análise do agente Mirach
+                    <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
+                </div>
+                <div class="ai-panel-body">
+                    <p class="mb-3">{{ prediction.explainability.ai_insights.summary }}</p>
+                    <div class="row g-3">
+                        {% if prediction.explainability.ai_insights.drivers %}
+                        <div class="col-md-4">
+                            <div class="mb-1 fw-bold small text-uppercase text-muted">Drivers</div>
+                            <ul class="ai-insight-list mb-0">
+                              {% for d in prediction.explainability.ai_insights.drivers %}
+                              <li><i class="fas fa-arrow-trend-up"></i><span>{{ d }}</span></li>
+                              {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        {% if prediction.explainability.ai_insights.risks %}
+                        <div class="col-md-4">
+                            <div class="mb-1 fw-bold small text-uppercase text-muted">Riscos</div>
+                            <ul class="ai-insight-list mb-0">
+                              {% for r in prediction.explainability.ai_insights.risks %}
+                              <li><i class="fas fa-triangle-exclamation"></i><span>{{ r }}</span></li>
+                              {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                        {% if prediction.explainability.ai_insights.next_steps %}
+                        <div class="col-md-4">
+                            <div class="mb-1 fw-bold small text-uppercase text-muted">Próximos passos</div>
+                            <ul class="ai-insight-list mb-0">
+                              {% for s in prediction.explainability.ai_insights.next_steps %}
+                              <li><i class="fas fa-circle-check"></i><span>{{ s }}</span></li>
+                              {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         {% elif prediction.status == 'training' or prediction.status == 'queued' %}
             <div class="card">
                 <div class="card-body text-center py-5">
@@ -223,9 +232,9 @@
                     <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
                     <h5>Erro na Previsão</h5>
                     <p class="text-muted">{{ prediction.error_message }}</p>
-                    <a href="{% url 'predictions:run' prediction.pk %}" class="btn btn-primary">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#runPredictionModal">
                         <i class="fas fa-redo"></i> Tentar Novamente
-                    </a>
+                    </button>
                 </div>
             </div>
         {% else %}
@@ -234,9 +243,9 @@
                     <i class="fas fa-play-circle fa-3x text-muted mb-3"></i>
                     <h5>Previsão Pronta para Execução</h5>
                     <p class="text-muted">Clique em "Executar Previsão" para começar o processamento.</p>
-                    <a href="{% url 'predictions:run' prediction.pk %}" class="btn btn-primary btn-lg">
+                    <button type="button" class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#runPredictionModal">
                         <i class="fas fa-play"></i> Executar Previsão
-                    </a>
+                    </button>
                 </div>
             </div>
         {% endif %}
@@ -265,19 +274,75 @@
     </div>
 </div>
 {% endif %}
+
+{% if prediction.status == 'pending' or prediction.status == 'failed' %}
+<!-- Run Prediction Modal -->
+<div class="modal fade" id="runPredictionModal" tabindex="-1" aria-labelledby="runPredictionModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <div>
+          <h5 class="modal-title" id="runPredictionModalLabel">
+            <i class="fas fa-play text-primary me-2"></i>{% if prediction.status == 'failed' %}Tentar novamente{% else %}Executar previsão{% endif %}
+          </h5>
+          <p class="text-muted small mb-0">Confirme os detalhes antes de enfileirar o job.</p>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">Você está prestes a executar <strong>{{ prediction.name }}</strong>.</p>
+        <div class="card border-0 bg-light mb-0">
+          <div class="card-body py-3">
+            <div class="row g-2 small">
+              <div class="col-5 text-muted">Projeto</div>
+              <div class="col-7 fw-semibold">{{ prediction.project.name }}</div>
+              <div class="col-5 text-muted">Dataset</div>
+              <div class="col-7 fw-semibold">{{ prediction.dataset.name }}</div>
+              <div class="col-5 text-muted">Modelo</div>
+              <div class="col-7 fw-semibold">{{ prediction.prediction_model.name }}</div>
+              <div class="col-5 text-muted">Horizonte</div>
+              <div class="col-7 fw-semibold">{{ prediction.prediction_horizon }} períodos</div>
+              <div class="col-5 text-muted">Algoritmo</div>
+              <div class="col-7 fw-semibold">{{ prediction.prediction_model.algorithm_type }}</div>
+            </div>
+          </div>
+        </div>
+        {% if prediction.status == 'failed' and prediction.error_message %}
+        <div class="alert alert-danger mt-3 mb-0 small">
+          <strong>Último erro:</strong> {{ prediction.error_message|truncatechars:180 }}
+        </div>
+        {% endif %}
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form method="post" action="{% url 'predictions:run' prediction.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-rocket me-1"></i>Executar agora
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-// Abrir modal de upgrade se sinalizado na querystring
-if (new URLSearchParams(window.location.search).get('upgrade') === '1') {
-  const modalEl = document.getElementById('pricingModal');
-  if (modalEl) {
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
+(function () {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('upgrade') === '1') {
+    const modalEl = document.getElementById('pricingModal');
+    if (modalEl) new bootstrap.Modal(modalEl).show();
   }
-}
+  if (params.get('run') === '1') {
+    const runModal = document.getElementById('runPredictionModal');
+    if (runModal) new bootstrap.Modal(runModal).show();
+  }
+})();
+
 {% if prediction.status == 'completed' %}
 // Load visualization data and create chart
 fetch('{% url "predictions:visualization" prediction.pk %}')
@@ -303,15 +368,15 @@ function createPredictionChart(data) {
             datasets: [{
                 label: 'Dados Históricos',
                 data: [...data.historical.values, ...new Array(data.forecast.values.length).fill(null)],
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderColor: '#4f46e5',
+                backgroundColor: 'rgba(79, 70, 229, 0.1)',
                 tension: 0.4,
                 fill: true
             }, {
                 label: 'Previsão',
                 data: [...new Array(data.historical.values.length).fill(null), ...data.forecast.values],
-                borderColor: '#f5576c',
-                backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
                 borderDash: [5, 5],
                 tension: 0.4,
                 fill: false
@@ -352,8 +417,6 @@ function createPredictionChart(data) {
     });
 
     // Add PNG export button behavior
-    const header = document.querySelector('.card-header .btn.btn-sm.btn-outline-secondary');
-    // The first button is CSV, second is JSON; we add PNG via dynamic link
     const pngBtn = document.createElement('a');
     pngBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
     pngBtn.innerHTML = '<i class="fas fa-image"></i> PNG';
@@ -366,7 +429,8 @@ function createPredictionChart(data) {
         a.download = 'prediction_chart.png';
         a.click();
     });
-    document.querySelector('.card-header div').appendChild(pngBtn);
+    const headerActions = document.querySelector('.card-header .d-flex > div');
+    if (headerActions) headerActions.appendChild(pngBtn);
 }
 {% elif prediction.status == 'training' or prediction.status == 'queued' %}
 // Poll for status updates

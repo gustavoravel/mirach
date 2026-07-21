@@ -4,63 +4,148 @@
 
 {% block extra_css %}
 <style>
-.metric-value {
-    font-size: 2rem;
-    font-weight: bold;
-    margin-bottom: 5px;
+.explore-metric .metric-value {
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #0f172a;
+    margin-bottom: 0.15rem;
 }
-
-.metric-label {
-    font-size: 0.9rem;
+.explore-metric .metric-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
 }
-
-/* Chart tooltip styles */
-.chart-tooltip {
-    position: absolute;
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 12px;
-    pointer-events: none;
-    opacity: 0;
-    z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    transition: opacity 0.2s ease;
+.explore-metric .metric-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
 }
-
-.chart-tooltip strong {
-    color: #fff;
-    font-weight: 600;
+.chart-box {
+    min-height: 420px;
+    width: 100%;
 }
-
-.table-responsive {
-    max-height: 400px;
-    overflow-y: auto;
+.chart-box-sm {
+    min-height: 320px;
+    width: 100%;
 }
-
-.loading {
-    min-height: 200px;
+.table-toolbar {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    margin-bottom: 0.85rem;
 }
-
+.table-toolbar .search-wrap {
+    position: relative;
+    min-width: 220px;
+    flex: 1;
+    max-width: 320px;
+}
+.table-toolbar .search-wrap i {
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+.table-toolbar .search-wrap input {
+    padding-left: 2rem;
+}
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #0f172a;
+    color: #fff;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.data-table thead th .sort-icon {
+    opacity: 0.45;
+    margin-left: 0.35rem;
+    font-size: 0.7rem;
+}
+.data-table thead th.sorted-asc .sort-icon,
+.data-table thead th.sorted-desc .sort-icon {
+    opacity: 1;
+}
+.data-table tbody tr:hover {
+    background: var(--primary-soft);
+}
+.data-table .num {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+}
+.error-pos { color: #dc2626; }
+.error-neg { color: #059669; }
+.table-scroll {
+    max-height: 440px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.table-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 0.35rem;
+}
+#data-tabs {
+    border-bottom: 1px solid var(--border);
+    gap: 0.25rem;
+}
 #data-tabs .nav-link {
+    border: none;
+    border-bottom: 2px solid transparent;
     color: var(--text-muted);
     font-weight: 600;
+    border-radius: 0;
+    padding: 0.65rem 1rem;
+    background: transparent;
 }
-
+#data-tabs .nav-link:hover {
+    color: var(--primary);
+    border-color: transparent;
+}
 #data-tabs .nav-link.active {
     color: var(--primary);
-    font-weight: 700;
+    border-bottom-color: var(--primary);
+    background: transparent;
+}
+.control-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
+<div class="container-fluid px-0">
     <div class="page-header">
         <div>
             <h2><i class="fas fa-chart-line me-2 text-primary"></i>Resultados e Exploração</h2>
@@ -69,367 +154,291 @@
                 <span class="badge bg-{% if prediction.status == 'completed' %}success{% elif prediction.status == 'failed' %}danger{% else %}secondary{% endif %}">{{ prediction.get_status_display }}</span>
             </p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
             <a href="{% url 'predictions:detail' prediction.pk %}" class="btn btn-outline-secondary btn-sm">
                 <i class="fas fa-arrow-left me-1"></i>Voltar
             </a>
-            <a href="{% url 'predictions:list' %}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-list me-1"></i>Ver Todas
+            <a href="{% url 'predictions:export_csv' prediction.pk %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-file-csv me-1"></i>CSV
             </a>
+            <a href="{% url 'predictions:export_json' prediction.pk %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-file-code me-1"></i>JSON
+            </a>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-download-chart">
+                <i class="fas fa-image me-1"></i>Gráfico PNG
+            </button>
         </div>
     </div>
 
-    <!-- Status Check -->
-    {% if prediction.status != 'completed' %}
-        <div class="alert alert-info mb-4">
-            <i class="fas fa-info-circle me-2"></i>
-            Esta previsão ainda não foi concluída. Status atual: <strong>{{ prediction.get_status_display }}</strong>.
-            <a href="{% url 'predictions:detail' prediction.pk %}" class="btn btn-sm btn-primary ms-2">
-                <i class="fas fa-play"></i> Executar Previsão
-            </a>
+    <!-- KPI metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="card explore-metric h-100">
+                <div class="card-body py-3">
+                    <div class="metric-label">RMSE</div>
+                    <div class="metric-value" id="rmse-value">—</div>
+                    <div class="metric-hint">Erro quadrático médio</div>
+                </div>
+            </div>
         </div>
+        <div class="col-6 col-md-3">
+            <div class="card explore-metric h-100">
+                <div class="card-body py-3">
+                    <div class="metric-label">MAE</div>
+                    <div class="metric-value" id="mae-value">—</div>
+                    <div class="metric-hint">Erro absoluto médio</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card explore-metric h-100">
+                <div class="card-body py-3">
+                    <div class="metric-label">MAPE</div>
+                    <div class="metric-value" id="mape-value">—</div>
+                    <div class="metric-hint">Erro percentual</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card explore-metric h-100">
+                <div class="card-body py-3">
+                    <div class="metric-label">R²</div>
+                    <div class="metric-value" id="r2-value">—</div>
+                    <div class="metric-hint">Ajuste do modelo</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card mb-4">
+        <div class="card-body py-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="chart-type" class="form-label">Tipo de gráfico</label>
+                    <select id="chart-type" class="form-select form-select-sm">
+                        <option value="lines">Linha</option>
+                        <option value="lines+markers">Linha + pontos</option>
+                        <option value="markers">Scatter</option>
+                        <option value="area">Área</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="history-window" class="form-label">Janela histórica</label>
+                    <select id="history-window" class="form-select form-select-sm">
+                        <option value="0">Série completa</option>
+                        <option value="30">Últimos 30 pontos</option>
+                        <option value="60" selected>Últimos 60 pontos</option>
+                        <option value="120">Últimos 120 pontos</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="forecast-horizon" class="form-label">Horizonte de previsão <span class="control-chip ms-1"><span id="horizon-value">12</span> períodos</span></label>
+                    <input type="range" id="forecast-horizon" class="form-range" min="1" max="12" value="12">
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="show-confidence" checked>
+                        <label class="form-check-label" for="show-confidence">Intervalo de confiança</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="show-actual" checked>
+                        <label class="form-check-label" for="show-actual">Valores reais (quando houver)</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main chart -->
+    <div class="card mb-4">
+        <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Série temporal · histórico + previsão</h5>
+            <div class="small text-muted">
+                <span class="legend-dot" style="background:#4f46e5"></span>Histórico
+                <span class="legend-dot ms-2" style="background:#f59e0b"></span>Previsão
+                <span class="legend-dot ms-2" style="background:#10b981"></span>Real
+                <span class="legend-dot ms-2" style="background:#c7d2fe"></span>IC
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="main-chart" class="chart-box">
+                <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Carregando gráfico...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Secondary charts -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-wave-square me-2"></i>Resíduos / erro da previsão</h5>
+                </div>
+                <div class="card-body">
+                    <div id="residuals-chart" class="chart-box-sm">
+                        <div class="d-flex align-items-center justify-content-center h-100 text-muted small">Sem erros calculáveis</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Importância das features</h5>
+                </div>
+                <div class="card-body">
+                    <div id="features-chart" class="chart-box-sm">
+                        <div class="d-flex align-items-center justify-content-center h-100 text-muted small">Sem importâncias disponíveis</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if prediction.explainability.ai_insights %}
+    <div class="ai-panel mb-4">
+        <div class="ai-panel-header">
+            <span class="ai-avatar"><i class="fas fa-robot"></i></span>
+            Insights do agente
+            <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
+        </div>
+        <div class="ai-panel-body">
+            <p class="mb-0" id="ai-summary">{{ prediction.explainability.ai_insights.summary }}</p>
+        </div>
+    </div>
     {% endif %}
 
-    <!-- Metrics Cards -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="metric-value text-danger" id="rmse-value">-</div>
-                    <div class="metric-label text-muted">RMSE</div>
-                </div>
-            </div>
+    <!-- Interactive tables -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-table me-2"></i>Tabelas interativas</h5>
         </div>
-        <div class="col-md-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="metric-value text-warning" id="mae-value">-</div>
-                    <div class="metric-label text-muted">MAE</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="metric-value text-info" id="mape-value">-</div>
-                    <div class="metric-label text-muted">MAPE</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center border-0 shadow-sm">
-                <div class="card-body">
-                    <div class="metric-value text-success" id="r2-value">-</div>
-                    <div class="metric-label text-muted">R²</div>
-                </div>
-            </div>
-        </div>
-    </div>
+        <div class="card-body">
+            <ul class="nav nav-tabs mb-3" id="data-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="results-tab" data-bs-toggle="tab" data-bs-target="#results-pane" type="button" role="tab">
+                        <i class="fas fa-crystal-ball me-1"></i>Previsões
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="historical-tab" data-bs-toggle="tab" data-bs-target="#historical-pane" type="button" role="tab">
+                        <i class="fas fa-history me-1"></i>Histórico
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary-pane" type="button" role="tab">
+                        <i class="fas fa-info-circle me-1"></i>Resumo
+                    </button>
+                </li>
+            </ul>
 
-    <!-- Control Panel -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-sliders-h me-2"></i>Controles e Filtros</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="chart-type" class="form-label">Tipo de Gráfico</label>
-                                <select id="chart-type" class="form-select">
-                                    <option value="line">Linha</option>
-                                    <option value="area">Área</option>
-                                    <option value="scatter">Scatter</option>
-                                </select>
-                            </div>
+            <div class="tab-content" id="data-tabs-content">
+                <div class="tab-pane fade show active" id="results-pane" role="tabpanel">
+                    <div class="table-toolbar">
+                        <div class="search-wrap">
+                            <i class="fas fa-search"></i>
+                            <input type="search" class="form-control form-control-sm" id="results-search" placeholder="Filtrar previsões...">
                         </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="forecast-horizon" class="form-label">Períodos de Previsão</label>
-                                <input type="range" id="forecast-horizon" class="form-range" min="1" max="30" value="10">
-                                <div class="text-center mt-2">
-                                    <span id="horizon-value" class="badge bg-primary">10</span> períodos
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="show-confidence" class="form-label">Intervalo de Confiança</label>
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" id="show-confidence" checked>
-                                    <label class="form-check-label" for="show-confidence">
-                                        Mostrar Intervalo
-                                    </label>
-                                </div>
-                            </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-export="results-csv">
+                                <i class="fas fa-download me-1"></i>CSV
+                            </button>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Chart -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Visualização Principal</h5>
-                </div>
-                <div class="card-body">
-                    <div id="main-chart" class="loading">
-                        <div class="text-center">
-                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-                            <p class="mt-2 text-muted">Carregando gráfico...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Secondary Charts -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Métricas de Performance</h5>
-                </div>
-                <div class="card-body">
-                    <div id="metrics-chart" class="loading">
-                        <div class="text-center">
-                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-                            <p class="mt-2 text-muted">Carregando métricas...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card h-100">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-star me-2"></i>Importância das Features</h5>
-                </div>
-                <div class="card-body">
-                    <div id="features-chart" class="loading">
-                        <div class="text-center">
-                            <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
-                            <p class="mt-2 text-muted">Carregando features...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Results Table -->
-    {% if prediction.status == 'completed' %}
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-table me-2"></i>Resultados da Previsão</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead class="table-dark">
+                    <div class="table-scroll">
+                        <table class="table table-sm table-hover data-table mb-0" id="results-table">
+                            <thead>
                                 <tr>
-                                    <th>Data</th>
-                                    <th class="text-end">Previsão</th>
-                                    <th class="text-end">Valor Real</th>
-                                    <th class="text-end">IC Inferior</th>
-                                    <th class="text-end">IC Superior</th>
-                                    <th class="text-end">Erro</th>
+                                    <th data-key="timestamp" data-type="date">Data <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="predicted" data-type="num" class="text-end">Previsão <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="actual" data-type="num" class="text-end">Real <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="ci_lower" data-type="num" class="text-end">IC ↓ <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="ci_upper" data-type="num" class="text-end">IC ↑ <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="error" data-type="num" class="text-end">Erro <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="pct_error" data-type="num" class="text-end">Erro % <i class="fas fa-sort sort-icon"></i></th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                {% for result in prediction.results.all %}
-                                <tr>
-                                    <td>{{ result.timestamp|date:'Y-m-d H:i' }}</td>
-                                    <td class="text-end">
-                                        <strong>{{ result.predicted_value|floatformat:2 }}</strong>
-                                    </td>
-                                    <td class="text-end">
-                                        {% if result.actual_value %}
-                                            {{ result.actual_value|floatformat:2 }}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end">
-                                        {% if result.confidence_interval_lower %}
-                                            {{ result.confidence_interval_lower|floatformat:2 }}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end">
-                                        {% if result.confidence_interval_upper %}
-                                            {{ result.confidence_interval_upper|floatformat:2 }}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end">
-                                        {% if result.actual_value %}
-                                            {% widthratio result.predicted_value result.actual_value 100 as error_percent %}
-                                            <span class="{% if error_percent|add:0 > 110 %}text-danger{% elif error_percent|add:0 > 105 %}text-warning{% else %}text-success{% endif %}">
-                                                {{ error_percent|floatformat:1 }}%
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center text-muted">
-                                        <i class="fas fa-info-circle me-2"></i>Nenhum resultado disponível
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
+                            <tbody></tbody>
                         </table>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Data Tables -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Análise Detalhada</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="nav nav-tabs" id="data-tabs" role="tablist" style="border-bottom: 3px solid #dee2e6 !important; margin-bottom: 1rem !important; background: #f8f9fa !important; padding: 0.5rem !important; border-radius: 0.5rem 0.5rem 0 0 !important; display: flex !important; list-style: none !important;">
-                        <li class="nav-item" role="presentation" style="margin-right: 0.5rem !important;">
-                            <button class="nav-link active" id="historical-tab" data-bs-toggle="tab" data-bs-target="#historical" type="button" role="tab" style="border: 2px solid #0d6efd !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #0d6efd !important; font-weight: 700 !important; padding: 0.75rem 1.5rem !important; background: #fff !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;">
-                                <i class="fas fa-history me-1"></i>Dados Históricos
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation" style="margin-right: 0.5rem !important;">
-                            <button class="nav-link" id="forecast-tab" data-bs-toggle="tab" data-bs-target="#forecast" type="button" role="tab" style="border: 2px solid #dee2e6 !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #495057 !important; font-weight: 600 !important; padding: 0.75rem 1.5rem !important; background: #e9ecef !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important;">
-                                <i class="fas fa-crystal-ball me-1"></i>Previsões
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation" style="margin-right: 0.5rem !important;">
-                            <button class="nav-link" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab" style="border: 2px solid #dee2e6 !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #495057 !important; font-weight: 600 !important; padding: 0.75rem 1.5rem !important; background: #e9ecef !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important;">
-                                <i class="fas fa-info-circle me-1"></i>Resumo
-                            </button>
-                        </li>
-                    </ul>
-                    <div class="tab-content mt-3" id="data-tabs-content">
-                        <div class="tab-pane fade show active" id="historical" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover" id="historical-table">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th>Data</th>
-                                            <th>Valor</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <!-- Historical data will be loaded here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="tab-pane fade" id="forecast" role="tabpanel">
-                            <div class="table-responsive">
-                                <table class="table table-striped table-hover" id="forecast-table">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th>Data</th>
-                                            <th>Previsão</th>
-                                            <th>Confiança Inferior</th>
-                                            <th>Confiança Superior</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <!-- Forecast data will be loaded here -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                        <div class="tab-pane fade" id="summary" role="tabpanel">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="card border-0 bg-light">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-cogs me-2"></i>Informações do Modelo</h6>
-                                            <ul class="list-unstyled mb-0">
-                                                <li><strong>Algoritmo:</strong> <span id="model-algorithm">-</span></li>
-                                                <li><strong>Features:</strong> <span id="model-features">-</span></li>
-                                                <li><strong>Amostras:</strong> <span id="model-samples">-</span></li>
-                                                <li><strong>Parâmetros:</strong> <span id="model-params">-</span></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card border-0 bg-light">
-                                        <div class="card-body">
-                                            <h6 class="card-title"><i class="fas fa-chart-line me-2"></i>Estatísticas dos Dados</h6>
-                                            <ul class="list-unstyled mb-0">
-                                                <li><strong>Período:</strong> <span id="data-period">-</span></li>
-                                                <li><strong>Observações:</strong> <span id="data-observations">-</span></li>
-                                                <li><strong>Média:</strong> <span id="data-mean">-</span></li>
-                                                <li><strong>Desvio:</strong> <span id="data-std">-</span></li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    <div class="table-footer">
+                        <span id="results-count">0 linhas</span>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" id="results-prev">Anterior</button>
+                            <button type="button" class="btn btn-outline-secondary" id="results-next">Próxima</button>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Download Section -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card border-success">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="fas fa-download me-2"></i>Exportação de Dados</h5>
+                <div class="tab-pane fade" id="historical-pane" role="tabpanel">
+                    <div class="table-toolbar">
+                        <div class="search-wrap">
+                            <i class="fas fa-search"></i>
+                            <input type="search" class="form-control form-control-sm" id="historical-search" placeholder="Filtrar histórico...">
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-export="historical-csv">
+                            <i class="fas fa-download me-1"></i>CSV
+                        </button>
+                    </div>
+                    <div class="table-scroll">
+                        <table class="table table-sm table-hover data-table mb-0" id="historical-table">
+                            <thead>
+                                <tr>
+                                    <th data-key="timestamp" data-type="date">Data <i class="fas fa-sort sort-icon"></i></th>
+                                    <th data-key="value" data-type="num" class="text-end">Valor <i class="fas fa-sort sort-icon"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer">
+                        <span id="historical-count">0 linhas</span>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" id="historical-prev">Anterior</button>
+                            <button type="button" class="btn btn-outline-secondary" id="historical-next">Próxima</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <p class="mb-3">Baixe os dados em diferentes formatos para análise externa:</p>
-                    <div class="row">
+
+                <div class="tab-pane fade" id="summary-pane" role="tabpanel">
+                    <div class="row g-3">
                         <div class="col-md-6">
-                            <h6><i class="fas fa-file-csv me-2"></i>Exportação Rápida</h6>
-                            <div class="d-grid gap-2">
-                                <a href="{% url 'predictions:export_csv' prediction.pk %}" class="btn btn-outline-primary">
-                                    <i class="fas fa-file-csv"></i> CSV Completo
-                                </a>
-                                <a href="{% url 'predictions:export_json' prediction.pk %}" class="btn btn-outline-primary">
-                                    <i class="fas fa-file-code"></i> JSON Completo
-                                </a>
+                            <div class="card border-0 bg-light h-100">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3"><i class="fas fa-cogs me-2"></i>Modelo</h6>
+                                    <dl class="row mb-0 small">
+                                        <dt class="col-5 text-muted">Algoritmo</dt>
+                                        <dd class="col-7" id="model-algorithm">—</dd>
+                                        <dt class="col-5 text-muted">Nome</dt>
+                                        <dd class="col-7" id="model-name">—</dd>
+                                        <dt class="col-5 text-muted">Horizonte</dt>
+                                        <dd class="col-7" id="model-horizon">—</dd>
+                                        <dt class="col-5 text-muted">Pontos previstos</dt>
+                                        <dd class="col-7" id="model-forecast-n">—</dd>
+                                    </dl>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <h6><i class="fas fa-chart-line me-2"></i>Exportação Personalizada</h6>
-                            <div class="d-grid gap-2">
-                                <button class="btn btn-outline-success" onclick="downloadData('historical', 'csv')">
-                                    <i class="fas fa-history"></i> Histórico CSV
-                                </button>
-                                <button class="btn btn-outline-success" onclick="downloadData('forecast', 'csv')">
-                                    <i class="fas fa-crystal-ball"></i> Previsões CSV
-                                </button>
-                                <button class="btn btn-outline-info" onclick="downloadData('chart', 'png')">
-                                    <i class="fas fa-image"></i> Gráfico PNG
-                                </button>
-                                <button class="btn btn-outline-info" onclick="downloadData('all', 'json')">
-                                    <i class="fas fa-database"></i> Dados Completos JSON
-                                </button>
+                            <div class="card border-0 bg-light h-100">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3"><i class="fas fa-chart-line me-2"></i>Estatísticas da série</h6>
+                                    <dl class="row mb-0 small">
+                                        <dt class="col-5 text-muted">Período</dt>
+                                        <dd class="col-7" id="data-period">—</dd>
+                                        <dt class="col-5 text-muted">Observações</dt>
+                                        <dd class="col-7" id="data-observations">—</dd>
+                                        <dt class="col-5 text-muted">Média</dt>
+                                        <dd class="col-7" id="data-mean">—</dd>
+                                        <dt class="col-5 text-muted">Desvio padrão</dt>
+                                        <dd class="col-7" id="data-std">—</dd>
+                                        <dt class="col-5 text-muted">Mín / Máx</dt>
+                                        <dd class="col-7" id="data-minmax">—</dd>
+                                    </dl>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -439,652 +448,557 @@
     </div>
 </div>
 
-<!-- Hidden data for JavaScript -->
-<div id="prediction-data" style="display: none;">
-    {{ prediction_data|safe }}
-</div>
+{{ prediction_data|json_script:"prediction-data" }}
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
 <script>
-// Sistema de tabs completamente customizado - sem Bootstrap
-document.addEventListener('DOMContentLoaded', function() {
-    const tabs = document.querySelectorAll('#data-tabs .nav-link');
-    const tabPanes = document.querySelectorAll('#data-tabs-content .tab-pane');
-    
-    // Função para atualizar estilos das abas
-    function updateTabStyles() {
-        tabs.forEach((tab) => {
-            const isActive = tab.classList.contains('active');
-            
-            if (isActive) {
-                // Estilo para aba ativa - usando setAttribute para forçar
-                tab.setAttribute('style', 'border: 2px solid #0d6efd !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #0d6efd !important; font-weight: 700 !important; padding: 0.75rem 1.5rem !important; background: #fff !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;');
-            } else {
-                // Estilo para abas inativas - usando setAttribute para forçar
-                tab.setAttribute('style', 'border: 2px solid #dee2e6 !important; border-bottom: none !important; border-radius: 0.5rem 0.5rem 0 0 !important; color: #495057 !important; font-weight: 600 !important; padding: 0.75rem 1.5rem !important; background: #e9ecef !important; text-decoration: none !important; display: inline-block !important; min-width: 120px !important; text-align: center !important; cursor: pointer !important;');
-            }
-        });
-    }
-    
-    // Função para mostrar tab específica
-    function showTab(targetTabId) {
-        // Remover active de todas as abas e panes
-        tabs.forEach(tab => {
-            tab.classList.remove('active');
-            tab.setAttribute('aria-selected', 'false');
-        });
-        
-        tabPanes.forEach(pane => {
-            pane.classList.remove('show', 'active');
-        });
-        
-        // Ativar aba e pane específicos
-        const targetTab = document.querySelector(`#data-tabs button[data-bs-target="${targetTabId}"]`);
-        const targetPane = document.querySelector(targetTabId);
-        
-        if (targetTab && targetPane) {
-            targetTab.classList.add('active');
-            targetTab.setAttribute('aria-selected', 'true');
-            targetPane.classList.add('show', 'active');
-        }
-        
-        // Atualizar estilos
-        updateTabStyles();
-    }
-    
-    // Adicionar event listeners customizados
-    tabs.forEach((tab) => {
-        tab.addEventListener('click', function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            
-            const targetId = this.getAttribute('data-bs-target');
-            if (targetId) {
-                showTab(targetId);
-            }
-        });
-    });
-    
-    // Atualizar estilos iniciais
-    updateTabStyles();
-});
-</script>
-<script>
-// Simple D3-based exploration
-class PredictionExplorer {
-    constructor() {
-        this.data = null;
-        this.historicalData = [];
-        this.forecastData = [];
-        this.metrics = {};
-        this.init();
-    }
+(function () {
+    const PAGE_SIZE = 25;
+    const COLORS = {
+        hist: '#4f46e5',
+        forecast: '#f59e0b',
+        actual: '#10b981',
+        ci: 'rgba(99, 102, 241, 0.18)',
+        residual: '#ef4444',
+        grid: '#e2e8f0',
+        text: '#64748b',
+    };
 
-    async init() {
-        await this.loadData();
-        this.setupEventListeners();
-        this.render();
-    }
-
-    async loadData() {
-        try {
-            const dataElement = document.getElementById('prediction-data');
-            if (dataElement?.textContent) {
-                this.data = JSON.parse(dataElement.textContent);
-            } else {
-                const response = await fetch(`{% url 'predictions:api_prediction_results' prediction.pk %}`);
-                this.data = await response.json();
-            }
-            this.processData();
-        } catch (error) {
-            console.error('Error loading data:', error);
-            this.showError('Erro ao carregar dados');
-        }
-    }
-
-    processData() {
-        if (!this.data) return;
-        
-        this.historicalData = (this.data.historical_data || []).map(item => ({
-            date: new Date(item.timestamp),
-            value: parseFloat(item.actual_value || item.value)
-        }));
-        
-        this.forecastData = (this.data.results || []).map(item => ({
-            date: new Date(item.timestamp),
-            predicted: parseFloat(item.predicted_value),
-            ci_lower: parseFloat(item.ci_lower || item.predicted_value * 0.9),
-            ci_upper: parseFloat(item.ci_upper || item.predicted_value * 1.1)
-        }));
-        
-        this.metrics = this.data.metrics || {};
-    }
-
-    render() {
-        this.updateMetrics();
-        this.createMainChart();
-        this.createMetricsChart();
-        this.createFeaturesChart();
-        this.updateTables();
-        this.updateSummary();
-    }
-
-    updateMetrics() {
-        const elements = {
-            'rmse-value': this.metrics.rmse?.toFixed(2) || '-',
-            'mae-value': this.metrics.mae?.toFixed(2) || '-',
-            'mape-value': this.metrics.mape ? `${this.metrics.mape.toFixed(2)}%` : '-',
-            'r2-value': this.metrics.r2?.toFixed(3) || '-'
-        };
-        
-        Object.entries(elements).forEach(([id, value]) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = value;
+    function fmtNum(v, digits = 2) {
+        if (v === null || v === undefined || Number.isNaN(Number(v))) return '—';
+        return Number(v).toLocaleString('pt-BR', {
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits,
         });
     }
 
-    createMainChart() {
-        const container = d3.select('#main-chart');
-        container.selectAll('*').remove();
-        
-        if (this.historicalData.length === 0 && this.forecastData.length === 0) {
-            container.html('<p class="text-muted">Nenhum dado disponível</p>');
-            return;
+    function fmtDate(d) {
+        if (!(d instanceof Date) || Number.isNaN(d.getTime())) return '—';
+        return d.toLocaleDateString('pt-BR');
+    }
+
+    function parseData() {
+        const el = document.getElementById('prediction-data');
+        return JSON.parse(el.textContent || '{}');
+    }
+
+    class InteractiveTable {
+        constructor({ tableId, countId, prevId, nextId, searchId, columns, rows }) {
+            this.table = document.getElementById(tableId);
+            this.tbody = this.table.querySelector('tbody');
+            this.countEl = document.getElementById(countId);
+            this.prevBtn = document.getElementById(prevId);
+            this.nextBtn = document.getElementById(nextId);
+            this.searchInput = document.getElementById(searchId);
+            this.columns = columns;
+            this.allRows = rows;
+            this.filtered = rows.slice();
+            this.sortKey = columns[0]?.key || null;
+            this.sortDir = 'asc';
+            this.page = 0;
+            this.bind();
+            this.render();
         }
 
-        const margin = {top: 20, right: 30, bottom: 40, left: 50};
-        const width = 800 - margin.left - margin.right;
-        const height = 400 - margin.top - margin.bottom;
-
-        const svg = container.append('svg')
-            .attr('width', width + margin.left + margin.right)
-            .attr('height', height + margin.top + margin.bottom);
-
-        const g = svg.append('g')
-            .attr('transform', `translate(${margin.left},${margin.top})`);
-
-        // Create tooltip
-        const tooltip = d3.select('body').append('div')
-            .attr('class', 'chart-tooltip')
-            .style('position', 'absolute')
-            .style('background', 'rgba(0, 0, 0, 0.8)')
-            .style('color', 'white')
-            .style('padding', '8px 12px')
-            .style('border-radius', '4px')
-            .style('font-size', '12px')
-            .style('pointer-events', 'none')
-            .style('opacity', 0)
-            .style('z-index', 1000);
-
-        // Combine all data for scale calculation
-        const allData = [...this.historicalData, ...this.forecastData];
-        const allDates = allData.map(d => d.date);
-        const allValues = allData.map(d => d.value || d.predicted);
-
-        const xScale = d3.scaleTime()
-            .domain(d3.extent(allDates))
-            .range([0, width]);
-
-        const yScale = d3.scaleLinear()
-            .domain(d3.extent(allValues))
-            .nice()
-            .range([height, 0]);
-
-        // Add axes
-        g.append('g')
-            .attr('transform', `translate(0,${height})`)
-            .call(d3.axisBottom(xScale).tickFormat(d3.timeFormat('%Y-%m-%d')));
-
-        g.append('g')
-            .call(d3.axisLeft(yScale));
-
-        // Add labels
-        g.append('text')
-            .attr('transform', 'rotate(-90)')
-            .attr('y', 0 - margin.left)
-            .attr('x', 0 - (height / 2))
-            .attr('dy', '1em')
-            .style('text-anchor', 'middle')
-            .text('Valor');
-
-        g.append('text')
-            .attr('transform', `translate(${width / 2}, ${height + margin.bottom - 5})`)
-            .style('text-anchor', 'middle')
-            .text('Data');
-
-        // Line generator
-        const line = d3.line()
-            .x(d => xScale(d.date))
-            .y(d => yScale(d.value || d.predicted))
-            .curve(d3.curveMonotoneX);
-
-        // Historical data
-        if (this.historicalData.length > 0) {
-            g.append('path')
-                .datum(this.historicalData)
-                .attr('fill', 'none')
-                .attr('stroke', '#1f77b4')
-                .attr('stroke-width', 2)
-                .attr('d', line);
-
-            g.selectAll('.historical-dots')
-                .data(this.historicalData)
-                .enter().append('circle')
-                .attr('class', 'historical-dots')
-                .attr('cx', d => xScale(d.date))
-                .attr('cy', d => yScale(d.value))
-                .attr('r', 3)
-                .attr('fill', '#1f77b4')
-                .style('cursor', 'pointer')
-                .on('mouseover', function(event, d) {
-                    tooltip.transition().duration(200).style('opacity', 1);
-                    tooltip.html(`
-                        <strong>Dados Históricos</strong><br/>
-                        Data: ${d3.timeFormat('%Y-%m-%d')(d.date)}<br/>
-                        Valor: ${d.value.toFixed(2)}
-                    `)
-                    .style('left', (event.pageX + 10) + 'px')
-                    .style('top', (event.pageY - 10) + 'px');
-                })
-                .on('mouseout', function() {
-                    tooltip.transition().duration(200).style('opacity', 0);
+        bind() {
+            this.table.querySelectorAll('thead th[data-key]').forEach((th) => {
+                th.addEventListener('click', () => {
+                    const key = th.dataset.key;
+                    if (this.sortKey === key) {
+                        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortKey = key;
+                        this.sortDir = 'asc';
+                    }
+                    this.apply();
                 });
-        }
-
-        // Forecast data
-        if (this.forecastData.length > 0) {
-            const horizon = parseInt(document.getElementById('forecast-horizon')?.value || 10);
-            const forecastSubset = this.forecastData.slice(0, horizon);
-
-            g.append('path')
-                .datum(forecastSubset)
-                .attr('fill', 'none')
-                .attr('stroke', '#ff7f0e')
-                .attr('stroke-width', 2)
-                .attr('stroke-dasharray', '5,5')
-                .attr('d', line);
-
-            g.selectAll('.forecast-dots')
-                .data(forecastSubset)
-                .enter().append('circle')
-                .attr('class', 'forecast-dots')
-                .attr('cx', d => xScale(d.date))
-                .attr('cy', d => yScale(d.predicted))
-                .attr('r', 3)
-                .attr('fill', '#ff7f0e')
-                .style('cursor', 'pointer')
-                .on('mouseover', function(event, d) {
-                    tooltip.transition().duration(200).style('opacity', 1);
-                    tooltip.html(`
-                        <strong>Previsão</strong><br/>
-                        Data: ${d3.timeFormat('%Y-%m-%d')(d.date)}<br/>
-                        Valor Previsto: ${d.predicted.toFixed(2)}
-                    `)
-                    .style('left', (event.pageX + 10) + 'px')
-                    .style('top', (event.pageY - 10) + 'px');
-                })
-                .on('mouseout', function() {
-                    tooltip.transition().duration(200).style('opacity', 0);
+            });
+            if (this.searchInput) {
+                this.searchInput.addEventListener('input', () => {
+                    this.page = 0;
+                    this.apply();
                 });
-        }
-    }
-
-    createMetricsChart() {
-        const container = d3.select('#metrics-chart');
-        container.selectAll('*').remove();
-
-        const validMetrics = Object.entries(this.metrics).filter(([key, value]) => 
-            value !== null && value !== undefined && !isNaN(value)
-        );
-
-        if (validMetrics.length === 0) {
-            container.html('<p class="text-muted">Nenhuma métrica disponível</p>');
-            return;
+            }
+            if (this.prevBtn) this.prevBtn.addEventListener('click', () => {
+                if (this.page > 0) { this.page -= 1; this.render(); }
+            });
+            if (this.nextBtn) this.nextBtn.addEventListener('click', () => {
+                const maxPage = Math.max(0, Math.ceil(this.filtered.length / PAGE_SIZE) - 1);
+                if (this.page < maxPage) { this.page += 1; this.render(); }
+            });
         }
 
-        const margin = {top: 20, right: 30, bottom: 40, left: 50};
-        const width = 400 - margin.left - margin.right;
-        const height = 300 - margin.top - margin.bottom;
+        setRows(rows) {
+            this.allRows = rows;
+            this.page = 0;
+            this.apply();
+        }
 
-        const svg = container.append('svg')
-            .attr('width', width + margin.left + margin.right)
-            .attr('height', height + margin.top + margin.bottom);
-
-        const g = svg.append('g')
-            .attr('transform', `translate(${margin.left},${margin.top})`);
-
-        // Create tooltip for metrics
-        const tooltip = d3.select('body').append('div')
-            .attr('class', 'chart-tooltip')
-            .style('position', 'absolute')
-            .style('background', 'rgba(0, 0, 0, 0.8)')
-            .style('color', 'white')
-            .style('padding', '8px 12px')
-            .style('border-radius', '4px')
-            .style('font-size', '12px')
-            .style('pointer-events', 'none')
-            .style('opacity', 0)
-            .style('z-index', 1000);
-
-        const xScale = d3.scaleBand()
-            .domain(validMetrics.map(([key]) => key.toUpperCase()))
-            .range([0, width])
-            .padding(0.1);
-
-        const maxValue = d3.max(validMetrics, ([key, value]) => Math.abs(value));
-        const yScale = d3.scaleLinear()
-            .domain([0, maxValue])
-            .nice()
-            .range([height, 0]);
-
-        const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b'];
-
-        g.selectAll('.bar')
-            .data(validMetrics)
-            .enter().append('rect')
-            .attr('class', 'bar')
-            .attr('x', ([key]) => xScale(key.toUpperCase()))
-            .attr('width', xScale.bandwidth())
-            .attr('y', ([key, value]) => yScale(Math.abs(value)))
-            .attr('height', ([key, value]) => Math.max(0, height - yScale(Math.abs(value))))
-            .attr('fill', (d, i) => colors[i % colors.length])
-            .style('cursor', 'pointer')
-            .on('mouseover', function(event, d) {
-                const [key, value] = d;
-                tooltip.transition().duration(200).style('opacity', 1);
-                tooltip.html(`
-                    <strong>Métrica: ${key.toUpperCase()}</strong><br/>
-                    Valor: ${value.toFixed(4)}
-                `)
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 10) + 'px');
-            })
-            .on('mouseout', function() {
-                tooltip.transition().duration(200).style('opacity', 0);
+        apply() {
+            const q = (this.searchInput?.value || '').trim().toLowerCase();
+            this.filtered = this.allRows.filter((row) => {
+                if (!q) return true;
+                return this.columns.some((col) => {
+                    const v = row[col.key];
+                    if (v === null || v === undefined) return false;
+                    if (v instanceof Date) return fmtDate(v).toLowerCase().includes(q);
+                    return String(v).toLowerCase().includes(q);
+                });
             });
 
-        g.append('g')
-            .attr('transform', `translate(0,${height})`)
-            .call(d3.axisBottom(xScale));
+            if (this.sortKey) {
+                const dir = this.sortDir === 'asc' ? 1 : -1;
+                const col = this.columns.find((c) => c.key === this.sortKey);
+                this.filtered.sort((a, b) => {
+                    let av = a[this.sortKey];
+                    let bv = b[this.sortKey];
+                    if (av == null && bv == null) return 0;
+                    if (av == null) return 1;
+                    if (bv == null) return -1;
+                    if (col?.type === 'date') return (av - bv) * dir;
+                    if (col?.type === 'num') return (Number(av) - Number(bv)) * dir;
+                    return String(av).localeCompare(String(bv), 'pt-BR') * dir;
+                });
+            }
 
-        g.append('g')
-            .call(d3.axisLeft(yScale));
-    }
-
-    createFeaturesChart() {
-        const container = d3.select('#features-chart');
-        container.selectAll('*').remove();
-
-        const featureImportance = this.data?.model_parameters?.feature_importance || {};
-        
-        if (Object.keys(featureImportance).length === 0) {
-            container.html('<p class="text-muted">Importância das features não disponível</p>');
-            return;
-        }
-
-        const sortedFeatures = Object.entries(featureImportance)
-            .sort(([,a], [,b]) => b - a)
-            .slice(0, 15);
-
-        const margin = {top: 20, right: 30, bottom: 40, left: 150};
-        const width = 500 - margin.left - margin.right;
-        const height = 400 - margin.top - margin.bottom;
-
-        const svg = container.append('svg')
-            .attr('width', width + margin.left + margin.right)
-            .attr('height', height + margin.top + margin.bottom);
-
-        const g = svg.append('g')
-            .attr('transform', `translate(${margin.left},${margin.top})`);
-
-        // Create tooltip for features
-        const tooltip = d3.select('body').append('div')
-            .attr('class', 'chart-tooltip')
-            .style('position', 'absolute')
-            .style('background', 'rgba(0, 0, 0, 0.8)')
-            .style('color', 'white')
-            .style('padding', '8px 12px')
-            .style('border-radius', '4px')
-            .style('font-size', '12px')
-            .style('pointer-events', 'none')
-            .style('opacity', 0)
-            .style('z-index', 1000);
-
-        const yScale = d3.scaleBand()
-            .domain(sortedFeatures.map(([feature]) => feature))
-            .range([0, height])
-            .padding(0.1);
-
-        const xScale = d3.scaleLinear()
-            .domain([0, d3.max(sortedFeatures, ([feature, importance]) => importance)])
-            .nice()
-            .range([0, width]);
-
-        g.selectAll('.bar')
-            .data(sortedFeatures)
-            .enter().append('rect')
-            .attr('class', 'bar')
-            .attr('y', ([feature]) => yScale(feature))
-            .attr('height', yScale.bandwidth())
-            .attr('x', 0)
-            .attr('width', ([feature, importance]) => xScale(importance))
-            .attr('fill', '#2ca02c')
-            .style('cursor', 'pointer')
-            .on('mouseover', function(event, d) {
-                const [feature, importance] = d;
-                tooltip.transition().duration(200).style('opacity', 1);
-                tooltip.html(`
-                    <strong>Feature: ${feature}</strong><br/>
-                    Importância: ${importance.toFixed(4)}
-                `)
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 10) + 'px');
-            })
-            .on('mouseout', function() {
-                tooltip.transition().duration(200).style('opacity', 0);
+            this.table.querySelectorAll('thead th[data-key]').forEach((th) => {
+                th.classList.remove('sorted-asc', 'sorted-desc');
+                if (th.dataset.key === this.sortKey) {
+                    th.classList.add(this.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+                }
             });
+            this.render();
+        }
 
-        g.append('g')
-            .call(d3.axisLeft(yScale));
+        render() {
+            const start = this.page * PAGE_SIZE;
+            const pageRows = this.filtered.slice(start, start + PAGE_SIZE);
+            this.tbody.innerHTML = pageRows.map((row) => {
+                return '<tr>' + this.columns.map((col) => {
+                    const raw = row[col.key];
+                    let cell;
+                    if (col.render) cell = col.render(raw, row);
+                    else if (col.type === 'date') cell = fmtDate(raw);
+                    else if (col.type === 'num') cell = fmtNum(raw, col.digits ?? 2);
+                    else cell = raw ?? '—';
+                    const cls = col.type === 'num' || col.align === 'end' ? 'num' : '';
+                    return `<td class="${cls}">${cell}</td>`;
+                }).join('') + '</tr>';
+            }).join('') || `<tr><td colspan="${this.columns.length}" class="text-center text-muted py-4">Nenhum registro</td></tr>`;
 
-        g.append('g')
-            .attr('transform', `translate(0,${height})`)
-            .call(d3.axisBottom(xScale));
-    }
+            const total = this.filtered.length;
+            const from = total ? start + 1 : 0;
+            const to = Math.min(start + PAGE_SIZE, total);
+            if (this.countEl) this.countEl.textContent = `${from}–${to} de ${total} linhas`;
+            if (this.prevBtn) this.prevBtn.disabled = this.page === 0;
+            if (this.nextBtn) this.nextBtn.disabled = to >= total;
+        }
 
-    updateTables() {
-        this.updateHistoricalTable();
-        this.updateForecastTable();
-    }
-
-    updateHistoricalTable() {
-        const tbody = document.querySelector('#historical-table tbody');
-        if (!tbody) return;
-        
-        tbody.innerHTML = this.historicalData.map(item => 
-            `<tr><td>${item.date.toLocaleDateString()}</td><td>${item.value.toFixed(2)}</td></tr>`
-        ).join('');
-    }
-
-    updateForecastTable() {
-        const tbody = document.querySelector('#forecast-table tbody');
-        if (!tbody) return;
-        
-        const horizon = parseInt(document.getElementById('forecast-horizon')?.value || 10);
-        const forecastSubset = this.forecastData.slice(0, horizon);
-        
-        tbody.innerHTML = forecastSubset.map(item => 
-            `<tr>
-                <td>${item.date.toLocaleDateString()}</td>
-                <td>${item.predicted.toFixed(2)}</td>
-                <td>${item.ci_lower.toFixed(2)}</td>
-                <td>${item.ci_upper.toFixed(2)}</td>
-            </tr>`
-        ).join('');
-    }
-
-    updateSummary() {
-        const elements = {
-            'model-algorithm': this.data?.model_algorithm || '-',
-            'model-features': this.data?.model_parameters?.n_features || '-',
-            'model-samples': this.data?.model_parameters?.n_samples || '-',
-            'model-params': JSON.stringify(this.data?.model_parameters || {}, null, 2)
-        };
-        
-        Object.entries(elements).forEach(([id, value]) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = value;
-        });
-
-        if (this.historicalData.length > 0) {
-            const dates = this.historicalData.map(d => d.date);
-            const values = this.historicalData.map(d => d.value);
-            const mean = values.reduce((a,b) => a+b, 0) / values.length;
-            const variance = values.reduce((a,b) => a + Math.pow(b - mean, 2), 0) / values.length;
-            const std = Math.sqrt(variance);
-
-            document.getElementById('data-period').textContent = 
-                `${dates[0].toLocaleDateString()} - ${dates[dates.length-1].toLocaleDateString()}`;
-            document.getElementById('data-observations').textContent = this.historicalData.length;
-            document.getElementById('data-mean').textContent = mean.toFixed(2);
-            document.getElementById('data-std').textContent = std.toFixed(2);
+        toCSV() {
+            const headers = this.columns.map((c) => c.label || c.key);
+            const lines = [headers.join(',')];
+            this.filtered.forEach((row) => {
+                lines.push(this.columns.map((col) => {
+                    const v = row[col.key];
+                    if (v instanceof Date) return v.toISOString();
+                    if (v == null) return '';
+                    return String(v).replace(/,/g, '');
+                }).join(','));
+            });
+            return lines.join('\n');
         }
     }
 
-    setupEventListeners() {
-        const chartType = document.getElementById('chart-type');
-        const horizon = document.getElementById('forecast-horizon');
-        const confidence = document.getElementById('show-confidence');
+    class PredictionExplorer {
+        constructor(raw) {
+            this.raw = raw || {};
+            this.historical = (this.raw.historical_data || []).map((d) => ({
+                timestamp: new Date(d.timestamp),
+                value: Number(d.value ?? d.actual_value),
+            })).filter((d) => !Number.isNaN(d.timestamp.getTime()) && !Number.isNaN(d.value));
 
-        if (chartType) chartType.addEventListener('change', () => this.render());
-        if (horizon) {
-            horizon.addEventListener('input', (e) => {
+            this.results = (this.raw.results || []).map((d) => ({
+                timestamp: new Date(d.timestamp),
+                predicted: Number(d.predicted_value),
+                actual: d.actual_value == null ? null : Number(d.actual_value),
+                ci_lower: d.ci_lower == null ? null : Number(d.ci_lower),
+                ci_upper: d.ci_upper == null ? null : Number(d.ci_upper),
+                error: d.error == null ? null : Number(d.error),
+                pct_error: d.pct_error == null ? null : Number(d.pct_error),
+            })).filter((d) => !Number.isNaN(d.timestamp.getTime()) && !Number.isNaN(d.predicted));
+
+            this.metrics = this.raw.metrics || {};
+            this.featureImportance = this.raw.feature_importance || {};
+            this.resultsTable = null;
+            this.historicalTable = null;
+
+            this.syncHorizonSlider();
+            this.bindControls();
+            this.updateKpis();
+            this.updateSummary();
+            this.initTables();
+            this.renderCharts();
+        }
+
+        syncHorizonSlider() {
+            const slider = document.getElementById('forecast-horizon');
+            const max = Math.max(1, this.results.length || this.raw.prediction_horizon || 12);
+            slider.max = String(max);
+            slider.value = String(max);
+            document.getElementById('horizon-value').textContent = slider.value;
+        }
+
+        bindControls() {
+            ['chart-type', 'history-window', 'show-confidence', 'show-actual'].forEach((id) => {
+                document.getElementById(id)?.addEventListener('change', () => this.renderCharts());
+            });
+            const horizon = document.getElementById('forecast-horizon');
+            horizon?.addEventListener('input', (e) => {
                 document.getElementById('horizon-value').textContent = e.target.value;
-                this.render();
+                this.renderCharts();
+                if (this.resultsTable) {
+                    this.resultsTable.setRows(this.results.slice(0, Number(e.target.value)));
+                }
+            });
+            document.getElementById('btn-download-chart')?.addEventListener('click', () => {
+                Plotly.downloadImage('main-chart', {
+                    format: 'png',
+                    width: 1280,
+                    height: 720,
+                    filename: 'mirach_previsao',
+                });
+            });
+            document.querySelectorAll('[data-export]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const kind = btn.getAttribute('data-export');
+                    const table = kind === 'historical-csv' ? this.historicalTable : this.resultsTable;
+                    if (!table) return;
+                    const blob = new Blob([table.toCSV()], { type: 'text/csv;charset=utf-8;' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = kind === 'historical-csv' ? 'historico.csv' : 'previsoes.csv';
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                });
             });
         }
-        if (confidence) confidence.addEventListener('change', () => this.render());
-    }
 
-    downloadData(type, format) {
-        let data, filename;
-        
-        switch (type) {
-            case 'historical':
-                data = this.historicalData.map(item => ({
-                    date: item.date.toISOString().split('T')[0],
-                    value: item.value
-                }));
-                filename = `dados_historicos_${format}`;
-                break;
-            case 'forecast':
-                const horizon = parseInt(document.getElementById('forecast-horizon')?.value || 10);
-                data = this.forecastData.slice(0, horizon).map(item => ({
-                    date: item.date.toISOString().split('T')[0],
-                    predicted: item.predicted,
-                    ci_lower: item.ci_lower,
-                    ci_upper: item.ci_upper
-                }));
-                filename = `previsoes_${format}`;
-                break;
-            case 'chart':
-                this.downloadChartAsPNG();
+        updateKpis() {
+            const set = (id, val, suffix = '') => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                el.textContent = (val === null || val === undefined || Number.isNaN(Number(val)))
+                    ? '—'
+                    : `${fmtNum(val, id === 'r2-value' ? 3 : 2)}${suffix}`;
+            };
+            set('rmse-value', this.metrics.rmse);
+            set('mae-value', this.metrics.mae);
+            set('mape-value', this.metrics.mape, '%');
+            set('r2-value', this.metrics.r2);
+        }
+
+        updateSummary() {
+            document.getElementById('model-algorithm').textContent = this.raw.model_algorithm || '—';
+            document.getElementById('model-name').textContent = this.raw.model_name || '—';
+            document.getElementById('model-horizon').textContent = this.raw.prediction_horizon ?? '—';
+            document.getElementById('model-forecast-n').textContent = this.results.length;
+
+            if (!this.historical.length) return;
+            const values = this.historical.map((d) => d.value);
+            const mean = values.reduce((a, b) => a + b, 0) / values.length;
+            const std = Math.sqrt(values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length);
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            document.getElementById('data-period').textContent =
+                `${fmtDate(this.historical[0].timestamp)} — ${fmtDate(this.historical[this.historical.length - 1].timestamp)}`;
+            document.getElementById('data-observations').textContent = String(this.historical.length);
+            document.getElementById('data-mean').textContent = fmtNum(mean);
+            document.getElementById('data-std').textContent = fmtNum(std);
+            document.getElementById('data-minmax').textContent = `${fmtNum(min)} / ${fmtNum(max)}`;
+        }
+
+        initTables() {
+            const horizon = Number(document.getElementById('forecast-horizon')?.value || this.results.length);
+            this.resultsTable = new InteractiveTable({
+                tableId: 'results-table',
+                countId: 'results-count',
+                prevId: 'results-prev',
+                nextId: 'results-next',
+                searchId: 'results-search',
+                rows: this.results.slice(0, horizon),
+                columns: [
+                    { key: 'timestamp', type: 'date', label: 'Data' },
+                    { key: 'predicted', type: 'num', label: 'Previsão' },
+                    { key: 'actual', type: 'num', label: 'Real' },
+                    { key: 'ci_lower', type: 'num', label: 'IC Inferior' },
+                    { key: 'ci_upper', type: 'num', label: 'IC Superior' },
+                    {
+                        key: 'error', type: 'num', label: 'Erro',
+                        render: (v) => {
+                            if (v == null || Number.isNaN(v)) return '—';
+                            const cls = v > 0 ? 'error-pos' : (v < 0 ? 'error-neg' : '');
+                            return `<span class="${cls}">${fmtNum(v)}</span>`;
+                        },
+                    },
+                    {
+                        key: 'pct_error', type: 'num', label: 'Erro %',
+                        render: (v) => (v == null || Number.isNaN(v) ? '—' : `${fmtNum(v, 1)}%`),
+                    },
+                ],
+            });
+
+            this.historicalTable = new InteractiveTable({
+                tableId: 'historical-table',
+                countId: 'historical-count',
+                prevId: 'historical-prev',
+                nextId: 'historical-next',
+                searchId: 'historical-search',
+                rows: this.historical,
+                columns: [
+                    { key: 'timestamp', type: 'date', label: 'Data' },
+                    { key: 'value', type: 'num', label: 'Valor' },
+                ],
+            });
+        }
+
+        getHistorySlice() {
+            const n = Number(document.getElementById('history-window')?.value || 0);
+            if (!n || n <= 0) return this.historical;
+            return this.historical.slice(-n);
+        }
+
+        getForecastSlice() {
+            const n = Number(document.getElementById('forecast-horizon')?.value || this.results.length);
+            return this.results.slice(0, n);
+        }
+
+        plotLayout(title) {
+            return {
+                margin: { t: 24, r: 24, b: 48, l: 64 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                font: { family: 'Inter, sans-serif', color: COLORS.text, size: 12 },
+                hovermode: 'x unified',
+                legend: { orientation: 'h', y: 1.12, x: 0 },
+                xaxis: {
+                    title: '',
+                    showgrid: true,
+                    gridcolor: COLORS.grid,
+                    zeroline: false,
+                    rangeslider: title === 'main' ? { visible: true, thickness: 0.08 } : undefined,
+                },
+                yaxis: {
+                    title: '',
+                    showgrid: true,
+                    gridcolor: COLORS.grid,
+                    zeroline: false,
+                    tickformat: '~s',
+                },
+                autosize: true,
+            };
+        }
+
+        renderCharts() {
+            this.renderMainChart();
+            this.renderResidualsChart();
+            this.renderFeaturesChart();
+        }
+
+        renderMainChart() {
+            const hist = this.getHistorySlice();
+            const forecast = this.getForecastSlice();
+            const mode = document.getElementById('chart-type')?.value || 'lines';
+            const showCi = document.getElementById('show-confidence')?.checked;
+            const showActual = document.getElementById('show-actual')?.checked;
+            const isArea = mode === 'area';
+            const traceMode = isArea ? 'lines' : mode;
+
+            const traces = [];
+
+            if (hist.length) {
+                traces.push({
+                    x: hist.map((d) => d.timestamp),
+                    y: hist.map((d) => d.value),
+                    type: 'scatter',
+                    mode: traceMode,
+                    name: 'Histórico',
+                    line: { color: COLORS.hist, width: 2.5, shape: 'spline' },
+                    fill: isArea ? 'tozeroy' : undefined,
+                    fillcolor: isArea ? 'rgba(79,70,229,0.12)' : undefined,
+                    marker: { size: 5, color: COLORS.hist },
+                    hovertemplate: '<b>Histórico</b><br>%{x|%d/%m/%Y}<br>%{y:.2f}<extra></extra>',
+                });
+            }
+
+            if (forecast.length) {
+                // Bridge last historical point into forecast for visual continuity
+                const bridgeX = [];
+                const bridgeY = [];
+                if (hist.length) {
+                    bridgeX.push(hist[hist.length - 1].timestamp);
+                    bridgeY.push(hist[hist.length - 1].value);
+                }
+                forecast.forEach((d) => {
+                    bridgeX.push(d.timestamp);
+                    bridgeY.push(d.predicted);
+                });
+
+                if (showCi && forecast.some((d) => d.ci_lower != null && d.ci_upper != null)) {
+                    const ciX = forecast.map((d) => d.timestamp);
+                    traces.push({
+                        x: ciX.concat([...ciX].reverse()),
+                        y: forecast.map((d) => d.ci_upper).concat(forecast.map((d) => d.ci_lower).reverse()),
+                        type: 'scatter',
+                        fill: 'toself',
+                        fillcolor: COLORS.ci,
+                        line: { color: 'transparent' },
+                        name: 'Intervalo de confiança',
+                        hoverinfo: 'skip',
+                        showlegend: true,
+                    });
+                }
+
+                traces.push({
+                    x: bridgeX,
+                    y: bridgeY,
+                    type: 'scatter',
+                    mode: traceMode,
+                    name: 'Previsão',
+                    line: { color: COLORS.forecast, width: 2.5, dash: 'dash', shape: 'spline' },
+                    fill: isArea ? 'tozeroy' : undefined,
+                    fillcolor: isArea ? 'rgba(245,158,11,0.12)' : undefined,
+                    marker: { size: 6, color: COLORS.forecast },
+                    hovertemplate: '<b>Previsão</b><br>%{x|%d/%m/%Y}<br>%{y:.2f}<extra></extra>',
+                });
+
+                if (showActual && forecast.some((d) => d.actual != null)) {
+                    traces.push({
+                        x: forecast.filter((d) => d.actual != null).map((d) => d.timestamp),
+                        y: forecast.filter((d) => d.actual != null).map((d) => d.actual),
+                        type: 'scatter',
+                        mode: 'markers+lines',
+                        name: 'Valor real',
+                        line: { color: COLORS.actual, width: 1.5 },
+                        marker: { size: 7, color: COLORS.actual, symbol: 'diamond' },
+                        hovertemplate: '<b>Real</b><br>%{x|%d/%m/%Y}<br>%{y:.2f}<extra></extra>',
+                    });
+                }
+
+                // Vertical divider at forecast start
+                if (forecast[0]) {
+                    const layout = this.plotLayout('main');
+                    layout.shapes = [{
+                        type: 'line',
+                        x0: forecast[0].timestamp,
+                        x1: forecast[0].timestamp,
+                        y0: 0,
+                        y1: 1,
+                        yref: 'paper',
+                        line: { color: '#94a3b8', width: 1, dash: 'dot' },
+                    }];
+                    layout.annotations = [{
+                        x: forecast[0].timestamp,
+                        y: 1,
+                        yref: 'paper',
+                        text: 'Início da previsão',
+                        showarrow: false,
+                        xanchor: 'left',
+                        yanchor: 'bottom',
+                        font: { size: 11, color: COLORS.text },
+                    }];
+                    Plotly.newPlot('main-chart', traces, layout, {
+                        responsive: true,
+                        displayModeBar: true,
+                        displaylogo: false,
+                        modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                    });
+                    return;
+                }
+            }
+
+            if (!traces.length) {
+                document.getElementById('main-chart').innerHTML =
+                    '<div class="d-flex align-items-center justify-content-center h-100 text-muted">Nenhum dado disponível para o gráfico</div>';
                 return;
-            case 'all':
-                data = {
-                    historical: this.historicalData,
-                    forecast: this.forecastData,
-                    metrics: this.metrics,
-                    modelParameters: this.data?.model_parameters
-                };
-                filename = `dados_completos_${format}`;
-                break;
-        }
-        
-        if (format === 'csv' && Array.isArray(data)) {
-            const csv = this.convertToCSV(data);
-            this.downloadFile(csv, filename, 'text/csv');
-        } else {
-            this.downloadFile(JSON.stringify(data, null, 2), filename, 'application/json');
-        }
-    }
+            }
 
-    downloadChartAsPNG() {
-        const svg = d3.select('#main-chart svg');
-        if (svg.empty()) {
-            alert('Nenhum gráfico disponível para download');
-            return;
-        }
-
-        // Get SVG data
-        const svgData = new XMLSerializer().serializeToString(svg.node());
-        
-        // Create canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-        
-        // Set canvas size
-        const svgRect = svg.node().getBoundingClientRect();
-        canvas.width = svgRect.width;
-        canvas.height = svgRect.height;
-        
-        // Convert SVG to PNG
-        img.onload = () => {
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            
-            // Download
-            canvas.toBlob(blob => {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'grafico_previsao.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+            Plotly.newPlot('main-chart', traces, this.plotLayout('main'), {
+                responsive: true,
+                displayModeBar: true,
+                displaylogo: false,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d'],
             });
-        };
-        
-        img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+        }
+
+        renderResidualsChart() {
+            const forecast = this.getForecastSlice().filter((d) => d.actual != null && d.error != null);
+            const el = document.getElementById('residuals-chart');
+            if (!forecast.length) {
+                el.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">Sem valores reais para calcular resíduos</div>';
+                return;
+            }
+
+            const layout = this.plotLayout();
+            layout.shapes = [{
+                type: 'line', x0: forecast[0].timestamp, x1: forecast[forecast.length - 1].timestamp,
+                y0: 0, y1: 0, line: { color: '#94a3b8', width: 1, dash: 'dot' },
+            }];
+            layout.yaxis.title = 'Erro (previsto − real)';
+
+            Plotly.newPlot('residuals-chart', [{
+                x: forecast.map((d) => d.timestamp),
+                y: forecast.map((d) => d.error),
+                type: 'bar',
+                name: 'Resíduo',
+                marker: {
+                    color: forecast.map((d) => (d.error >= 0 ? '#fca5a5' : '#6ee7b7')),
+                },
+                hovertemplate: '<b>Resíduo</b><br>%{x|%d/%m/%Y}<br>%{y:.2f}<extra></extra>',
+            }], layout, { responsive: true, displayModeBar: false, displaylogo: false });
+        }
+
+        renderFeaturesChart() {
+            const entries = Object.entries(this.featureImportance || {})
+                .map(([k, v]) => [k, Number(v)])
+                .filter(([, v]) => !Number.isNaN(v))
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 12);
+
+            const el = document.getElementById('features-chart');
+            if (!entries.length) {
+                el.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">Este modelo não expõe importância de features</div>';
+                return;
+            }
+
+            const layout = this.plotLayout();
+            layout.margin.l = 120;
+            layout.yaxis.automargin = true;
+
+            Plotly.newPlot('features-chart', [{
+                type: 'bar',
+                orientation: 'h',
+                y: entries.map(([k]) => k).reverse(),
+                x: entries.map(([, v]) => v).reverse(),
+                marker: {
+                    color: entries.map((_, i) => `rgba(79, 70, 229, ${0.35 + (i / entries.length) * 0.55})`).reverse(),
+                },
+                hovertemplate: '<b>%{y}</b><br>Importância: %{x:.4f}<extra></extra>',
+            }], layout, { responsive: true, displayModeBar: false, displaylogo: false });
+        }
     }
 
-    convertToCSV(data) {
-        if (data.length === 0) return '';
-        const headers = Object.keys(data[0]);
-        return [
-            headers.join(','),
-            ...data.map(row => headers.map(header => row[header]).join(','))
-        ].join('\n');
-    }
-
-    downloadFile(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    showError(message) {
-        ['main-chart', 'metrics-chart', 'features-chart'].forEach(id => {
-            const element = document.getElementById(id);
-            if (element) element.innerHTML = `<p class="text-danger">${message}</p>`;
-        });
-    }
-}
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    new PredictionExplorer();
-});
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            const data = parseData();
+            window.__mirachExplorer = new PredictionExplorer(data);
+        } catch (err) {
+            console.error(err);
+            document.getElementById('main-chart').innerHTML =
+                `<div class="text-danger p-4">Erro ao carregar exploração: ${err.message}</div>`;
+        }
+    });
+})();
 </script>
 {% endblock %}

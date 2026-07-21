@@ -186,8 +186,9 @@ def prediction_run(request, pk):
         AuditLog.objects.create(project=prediction.project, user=request.user, action='prediction_run', context={'prediction_id': prediction.id})
         messages.success(request, 'Previsão enfileirada! Você será notificado ao concluir.')
         return redirect('predictions:detail', pk=prediction.pk)
-    
-    return render(request, 'predictions/run.html', {'prediction': prediction})
+
+    # GET: open confirmation as modal on the detail page
+    return redirect(f"{reverse('predictions:detail', args=[prediction.pk])}?run=1")
 
 
 @login_required
@@ -720,6 +721,24 @@ def prediction_explore_interactive(request, pk):
     if prediction.status != 'completed':
         messages.warning(request, 'A previsão ainda não foi concluída.')
         return redirect('predictions:detail', pk=pk)
+
+    explain = prediction.explainability if isinstance(prediction.explainability, dict) else {}
+    feature_importance = (
+        explain.get('feature_importances')
+        or explain.get('feature_importance')
+        or (prediction.model_parameters or {}).get('feature_importance')
+        or {}
+    )
+    if isinstance(feature_importance, list):
+        # [{"feature": "...", "importance": 0.1}, ...] or parallel lists
+        try:
+            feature_importance = {
+                str(item.get('feature', item.get('name', i))): float(item.get('importance', item.get('value', 0)))
+                for i, item in enumerate(feature_importance)
+                if isinstance(item, dict)
+            }
+        except Exception:
+            feature_importance = {}
     
     # Prepare data for the interactive page
     prediction_data = {
@@ -727,7 +746,12 @@ def prediction_explore_interactive(request, pk):
         'results': [],
         'metrics': prediction.metrics or {},
         'model_algorithm': prediction.prediction_model.algorithm_type,
-        'model_parameters': prediction.model_parameters or {}
+        'model_name': prediction.prediction_model.name,
+        'model_parameters': prediction.model_parameters or {},
+        'feature_importance': feature_importance if isinstance(feature_importance, dict) else {},
+        'ai_insights': explain.get('ai_insights') or {},
+        'prediction_horizon': prediction.prediction_horizon,
+        'prediction_name': prediction.name,
     }
     
     # Load historical data from dataset
@@ -748,10 +772,15 @@ def prediction_explore_interactive(request, pk):
                     if dataset.file.name.lower().endswith(('.xlsx', '.xls')):
                         df = pd.read_excel(fh)
                     else:
-                        df = pd.read_csv(fh, low_memory=False)
+                        from datasets.utils import _read_csv_bytes
+                        try:
+                            df, _meta = _read_csv_bytes(fh.read())
+                        except Exception:
+                            fh.seek(0)
+                            df = pd.read_csv(fh)
                 
                 # Prepare historical data
-                df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+                df[timestamp_col] = pd.to_datetime(df[timestamp_col], errors='coerce')
                 df[target_col] = pd.to_numeric(df[target_col], errors='coerce')
                 historical_df = df[[timestamp_col, target_col]].dropna()
                 historical_df = historical_df.sort_values(timestamp_col)
@@ -763,25 +792,40 @@ def prediction_explore_interactive(request, pk):
                     }
                     for _, row in historical_df.iterrows()
                 ]
+                prediction_data['target_column'] = target_col
+                prediction_data['timestamp_column'] = timestamp_col
     except Exception as e:
-        print(f"Error loading historical data: {e}")
+        logger = __import__('logging').getLogger(__name__)
+        logger.exception("Error loading historical data for explore: %s", e)
     
     # Load prediction results
     try:
         results = prediction.results.all().order_by('timestamp')
-        prediction_data['results'] = [
-            {
+        rows = []
+        for result in results:
+            predicted = float(result.predicted_value)
+            actual = float(result.actual_value) if result.actual_value is not None else None
+            ci_lower = float(result.confidence_interval_lower) if result.confidence_interval_lower is not None else None
+            ci_upper = float(result.confidence_interval_upper) if result.confidence_interval_upper is not None else None
+            error = (predicted - actual) if actual is not None else None
+            abs_error = abs(error) if error is not None else None
+            pct_error = (abs_error / abs(actual) * 100.0) if (actual is not None and actual != 0 and abs_error is not None) else None
+            rows.append({
                 'timestamp': result.timestamp.isoformat(),
-                'predicted_value': float(result.predicted_value),
-                'ci_lower': float(result.confidence_interval_lower) if result.confidence_interval_lower else None,
-                'ci_upper': float(result.confidence_interval_upper) if result.confidence_interval_upper else None
-            }
-            for result in results
-        ]
+                'predicted_value': predicted,
+                'actual_value': actual,
+                'ci_lower': ci_lower,
+                'ci_upper': ci_upper,
+                'error': error,
+                'abs_error': abs_error,
+                'pct_error': pct_error,
+            })
+        prediction_data['results'] = rows
     except Exception as e:
-        print(f"Error loading prediction results: {e}")
+        logger = __import__('logging').getLogger(__name__)
+        logger.exception("Error loading prediction results for explore: %s", e)
     
     return render(request, 'predictions/explore_interactive.html', {
         'prediction': prediction,
-        'prediction_data': json.dumps(prediction_data)
+        'prediction_data': prediction_data,
     })
