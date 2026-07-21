@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/backtest/<int:dataset_id>/', views.backtest, name='backtest'),
     path('api/visualization/<int:pk>/', views.get_visualization_data, name='visualization'),
     path('api/status/<int:pk>/', views.prediction_status, name='status'),
+    path('api/insights/<int:pk>/', views.prediction_ensure_insights, name='ensure_insights'),
     path('api/export/<int:pk>/csv/', views.export_results_csv, name='export_csv'),
     path('api/export/<int:pk>/json/', views.export_results_json, name='export_json'),
     # Public API

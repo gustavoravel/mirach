@@ -557,11 +557,28 @@ def prediction_status(request, pk):
         prediction = get_object_or_404(Prediction, pk=pk)
         if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
             return JsonResponse({'error': 'Acesso negado'})
+        explain = prediction.explainability if isinstance(prediction.explainability, dict) else {}
+        has_ai_insights = bool(explain.get('ai_insights'))
+        insights_status = explain.get('insights_status') or (
+            'ready' if has_ai_insights else ('pending' if prediction.status == 'training' else 'missing')
+        )
+        results_ready = bool(prediction.predictions_data) or prediction.results.exists()
+        # Detail page should only treat the run as display-ready when forecast
+        # exists and insights were attempted (ready/failed/skipped) or status completed with insights.
+        ready_for_display = (
+            prediction.status == 'completed'
+            and results_ready
+            and (has_ai_insights or insights_status in ('ready', 'failed', 'skipped'))
+        )
         payload = {
             'status': prediction.status,
             'progress': prediction.progress if hasattr(prediction, 'progress') else 0,
             'eta': prediction.estimated_completion.isoformat() if prediction.estimated_completion else None,
-            'error_message': prediction.error_message
+            'error_message': prediction.error_message,
+            'has_ai_insights': has_ai_insights,
+            'insights_status': insights_status,
+            'results_ready': results_ready,
+            'ready_for_display': ready_for_display,
         }
         # Verbose fields only in DEBUG and when requested
         if getattr(settings, 'DEBUG', False) and request.GET.get('verbose'):
@@ -578,6 +595,59 @@ def prediction_status(request, pk):
         return JsonResponse(payload)
     except Exception as e:
         return JsonResponse({'error': str(e)})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def prediction_ensure_insights(request, pk):
+    """Return AI insights, generating them once if missing on a completed prediction."""
+    prediction = get_object_or_404(Prediction, pk=pk)
+    if not ProjectMembership.objects.filter(project=prediction.project, user=request.user).exists():
+        return JsonResponse({'error': 'Acesso negado'}, status=403)
+
+    explain = dict(prediction.explainability or {}) if isinstance(prediction.explainability, dict) else {}
+    insights = explain.get('ai_insights')
+    if insights:
+        return JsonResponse({
+            'success': True,
+            'insights': insights,
+            'insights_status': explain.get('insights_status') or 'ready',
+            'generated': False,
+        })
+
+    if prediction.status != 'completed':
+        return JsonResponse({
+            'success': False,
+            'insights': None,
+            'insights_status': explain.get('insights_status') or 'pending',
+            'generated': False,
+            'message': 'Previsão ainda não concluída',
+        })
+
+    try:
+        from .llm.narrative_agent import generate_insights
+        insights = generate_insights(prediction)
+        explain['ai_insights'] = insights
+        explain['insights_status'] = 'ready'
+        prediction.explainability = explain
+        prediction.save(update_fields=['explainability'])
+        return JsonResponse({
+            'success': True,
+            'insights': insights,
+            'insights_status': 'ready',
+            'generated': True,
+        })
+    except Exception as exc:
+        explain['insights_status'] = 'failed'
+        prediction.explainability = explain
+        prediction.save(update_fields=['explainability'])
+        return JsonResponse({
+            'success': False,
+            'insights': None,
+            'insights_status': 'failed',
+            'generated': False,
+            'error': str(exc),
+        }, status=500)
 
 
 @login_required

@@ -20,25 +20,41 @@ def run_prediction_task(self, prediction_id: int) -> dict:
     prediction.save(update_fields=['status', 'progress'])
 
     service = PredictionService()
-    result = service.run_prediction(prediction)
+    # Keep status=training until narrative insights finish so the detail page
+    # only reloads when chart data + agent analysis are both ready.
+    result = service.run_prediction(prediction, finalize=False)
 
     if result.get('success'):
         prediction.refresh_from_db()
         prediction.progress = 90
         prediction.save(update_fields=['progress'])
-        # Narrative insights (non-fatal)
+        # Narrative insights (non-fatal) — always produce a report (NIM or fallback)
+        insights_status = 'ready'
         try:
             from .llm.narrative_agent import generate_insights
             insights = generate_insights(prediction)
             explain = dict(prediction.explainability or {})
             explain['ai_insights'] = insights
+            explain['insights_status'] = 'ready'
             prediction.explainability = explain
             prediction.save(update_fields=['explainability'])
         except Exception as exc:
             logger.warning("NarrativeAgent failed for prediction %s: %s", prediction_id, exc)
+            insights_status = 'failed'
+            explain = dict(prediction.explainability or {})
+            explain['insights_status'] = 'failed'
+            prediction.explainability = explain
+            prediction.save(update_fields=['explainability'])
+
+        from datetime import datetime
+        prediction.status = 'completed'
+        prediction.completed_at = timezone.now()
         prediction.progress = 100
         prediction.estimated_completion = timezone.now()
-        prediction.save(update_fields=['progress', 'estimated_completion'])
+        prediction.save(update_fields=[
+            'status', 'completed_at', 'progress', 'estimated_completion',
+        ])
+        result['insights_status'] = insights_status
     return {
         'prediction_id': prediction_id,
         'status': 'completed' if result.get('success') else 'failed',

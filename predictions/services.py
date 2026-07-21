@@ -127,7 +127,7 @@ class PredictionService:
         
         return train_data, val_data, test_data, train_exog, val_exog, test_exog
     
-    def run_prediction(self, prediction: Prediction) -> Dict[str, Any]:
+    def run_prediction(self, prediction: Prediction, *, finalize: bool = True) -> Dict[str, Any]:
         """Run prediction using the specified model"""
         try:
             # Update status
@@ -225,9 +225,15 @@ class PredictionService:
                 lower=lower, upper=upper,
             )
             
-            # Update prediction
-            prediction.status = 'completed'
-            prediction.completed_at = datetime.now()
+            # Update prediction payload; finalize status only when requested
+            # (Celery task delays finalize until NarrativeAgent finishes)
+            if finalize:
+                prediction.status = 'completed'
+                prediction.completed_at = datetime.now()
+                prediction.progress = 100
+            else:
+                prediction.status = 'training'
+                prediction.progress = 85
             prediction.metrics = metrics or {}
             prediction.predictions_data = self._sanitize_json({
                 'forecast': predictions.tolist(),
@@ -263,6 +269,8 @@ class PredictionService:
                     merged['domain_label'] = dom.get('label')
                 except Exception:
                     pass
+            if not finalize:
+                merged['insights_status'] = 'pending'
             prediction.explainability = merged
             prediction.save()
             # Webhook notification

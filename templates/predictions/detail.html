@@ -160,100 +160,97 @@
     <!-- Visualização -->
     <div class="col-lg-8">
         {% if prediction.status == 'completed' %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0"><i class="fas fa-chart-line"></i> Gráfico de Previsão</h6>
-                        <div>
-                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'predictions:export_csv' prediction.pk %}"><i class="fas fa-file-csv"></i> CSV</a>
-                            <a class="btn btn-sm btn-outline-secondary" href="{% url 'predictions:export_json' prediction.pk %}"><i class="fas fa-code"></i> JSON</a>
+            <div id="results-bundle" class="results-bundle is-loading" data-has-insights="{% if prediction.explainability.ai_insights %}1{% else %}0{% endif %}">
+              <div id="results-bundle-loader" class="card mb-4">
+                <div class="card-body text-center py-5">
+                  <div class="spinner-border text-primary mb-3" role="status"></div>
+                  <h5 class="mb-1">Preparando resultados</h5>
+                  <p class="text-muted mb-0">Carregando gráfico e análise do agente para exibir juntos…</p>
+                </div>
+              </div>
+              <div id="results-bundle-content" class="results-bundle-content" hidden>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0"><i class="fas fa-chart-line"></i> Gráfico de Previsão</h6>
+                            <div id="chart-export-actions">
+                                <a class="btn btn-sm btn-outline-secondary" href="{% url 'predictions:export_csv' prediction.pk %}"><i class="fas fa-file-csv"></i> CSV</a>
+                                <a class="btn btn-sm btn-outline-secondary" href="{% url 'predictions:export_json' prediction.pk %}"><i class="fas fa-code"></i> JSON</a>
+                            </div>
                         </div>
                     </div>
+                    <div class="card-body">
+                        <canvas id="predictionChart" height="400"></canvas>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <canvas id="predictionChart" height="400"></canvas>
-                </div>
-            </div>
 
-            {% if prediction.explainability.ai_insights %}
-            <div class="ai-panel mb-4">
-                <div class="ai-panel-header">
-                    <span class="ai-avatar"><i class="fas fa-robot"></i></span>
-                    Análise do agente Mirach
-                    {% if domain %}<span class="ai-chip ms-2">{{ domain.label }}</span>{% endif %}
-                    <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
-                </div>
-                <div class="ai-panel-body">
-                    <p class="mb-3">{{ prediction.explainability.ai_insights.summary }}</p>
-                    <div class="row g-3">
-                        {% if prediction.explainability.ai_insights.drivers %}
-                        <div class="col-md-4">
-                            <div class="mb-1 fw-bold small text-uppercase text-muted">Drivers</div>
-                            <ul class="ai-insight-list mb-0">
-                              {% for d in prediction.explainability.ai_insights.drivers %}
-                              <li><i class="fas fa-arrow-trend-up"></i><span>{{ d }}</span></li>
-                              {% endfor %}
-                            </ul>
+                <div class="ai-panel mb-4" id="agent-analysis-panel">
+                    <div class="ai-panel-header">
+                        <span class="ai-avatar"><i class="fas fa-robot"></i></span>
+                        Análise do agente Mirach
+                        {% if domain %}<span class="ai-chip ms-2">{{ domain.label }}</span>{% endif %}
+                        <span class="ai-badge ms-auto"><i class="fas fa-wand-magic-sparkles"></i>IA</span>
+                    </div>
+                    <div class="ai-panel-body" id="agent-analysis-body">
+                        {% if prediction.explainability.ai_insights %}
+                        <p class="mb-3" id="agent-summary">{{ prediction.explainability.ai_insights.summary }}</p>
+                        <div class="row g-3" id="agent-sections">
+                            {% if prediction.explainability.ai_insights.drivers %}
+                            <div class="col-md-4" id="agent-drivers-wrap">
+                                <div class="mb-1 fw-bold small text-uppercase text-muted">Drivers</div>
+                                <ul class="ai-insight-list mb-0" id="agent-drivers">
+                                  {% for d in prediction.explainability.ai_insights.drivers %}
+                                  <li><i class="fas fa-arrow-trend-up"></i><span>{{ d }}</span></li>
+                                  {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if prediction.explainability.ai_insights.risks %}
+                            <div class="col-md-4" id="agent-risks-wrap">
+                                <div class="mb-1 fw-bold small text-uppercase text-muted">Riscos</div>
+                                <ul class="ai-insight-list mb-0" id="agent-risks">
+                                  {% for r in prediction.explainability.ai_insights.risks %}
+                                  <li><i class="fas fa-triangle-exclamation"></i><span>{{ r }}</span></li>
+                                  {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                            {% if prediction.explainability.ai_insights.next_steps %}
+                            <div class="col-md-4" id="agent-steps-wrap">
+                                <div class="mb-1 fw-bold small text-uppercase text-muted">Próximos passos</div>
+                                <ul class="ai-insight-list mb-0" id="agent-steps">
+                                  {% for s in prediction.explainability.ai_insights.next_steps %}
+                                  <li><i class="fas fa-circle-check"></i><span>{{ s }}</span></li>
+                                  {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
                         </div>
+                        {% else %}
+                        <p class="mb-0 text-muted" id="agent-summary">Gerando análise do agente…</p>
+                        <div class="row g-3" id="agent-sections"></div>
                         {% endif %}
-                        {% if prediction.explainability.ai_insights.risks %}
-                        <div class="col-md-4">
-                            <div class="mb-1 fw-bold small text-uppercase text-muted">Riscos</div>
-                            <ul class="ai-insight-list mb-0">
-                              {% for r in prediction.explainability.ai_insights.risks %}
-                              <li><i class="fas fa-triangle-exclamation"></i><span>{{ r }}</span></li>
-                              {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
-                        {% if prediction.explainability.ai_insights.next_steps %}
-                        <div class="col-md-4">
-                            <div class="mb-1 fw-bold small text-uppercase text-muted">Próximos passos</div>
-                            <ul class="ai-insight-list mb-0">
-                              {% for s in prediction.explainability.ai_insights.next_steps %}
-                              <li><i class="fas fa-circle-check"></i><span>{{ s }}</span></li>
-                              {% endfor %}
-                            </ul>
-                        </div>
+                        {% if domain.result_tips %}
+                        <hr class="my-3">
+                        <div class="mb-1 fw-bold small text-uppercase text-muted">Dicas do domínio {{ domain.label }}</div>
+                        <ul class="ai-insight-list mb-0">
+                          {% for tip in domain.result_tips %}
+                          <li><i class="fas fa-lightbulb"></i><span>{{ tip }}</span></li>
+                          {% endfor %}
+                        </ul>
                         {% endif %}
                     </div>
-                    {% if domain.result_tips %}
-                    <hr class="my-3">
-                    <div class="mb-1 fw-bold small text-uppercase text-muted">Dicas do domínio {{ domain.label }}</div>
-                    <ul class="ai-insight-list mb-0">
-                      {% for tip in domain.result_tips %}
-                      <li><i class="fas fa-lightbulb"></i><span>{{ tip }}</span></li>
-                      {% endfor %}
-                    </ul>
-                    {% endif %}
                 </div>
+              </div>
             </div>
-            {% elif domain %}
-            <div class="ai-panel mb-4">
-                <div class="ai-panel-header">
-                    <span class="ai-avatar"><i class="fas fa-tags"></i></span>
-                    Contexto do domínio {{ domain.label }}
-                </div>
-                <div class="ai-panel-body">
-                    <p class="small mb-2">{{ domain.description }}</p>
-                    {% if domain.result_tips %}
-                    <ul class="ai-insight-list mb-0">
-                      {% for tip in domain.result_tips %}
-                      <li><i class="fas fa-lightbulb"></i><span>{{ tip }}</span></li>
-                      {% endfor %}
-                    </ul>
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
         {% elif prediction.status == 'training' or prediction.status == 'queued' %}
             <div class="card">
                 <div class="card-body text-center py-5">
                     <div class="spinner-border text-primary mb-3" role="status">
                         <span class="visually-hidden">Processando...</span>
                     </div>
-                    <h5>{% if prediction.status == 'queued' %}Na fila{% else %}Processando Previsão...{% endif %}</h5>
-                    <p class="text-muted">Isso pode levar alguns minutos dependendo do tamanho dos dados.</p>
+                    <h5>{% if prediction.status == 'queued' %}Na fila{% else %}Processando previsão e análise…{% endif %}</h5>
+                    <p class="text-muted">O gráfico e a análise do agente serão exibidos juntos ao concluir.</p>
                     <div class="progress" style="height: 6px;">
                         <div class="progress-bar progress-bar-striped progress-bar-animated" 
                              id="progressBar" style="width: {{ prediction.progress|default:0 }}%"></div>
@@ -381,118 +378,180 @@
 })();
 
 {% if prediction.status == 'completed' %}
-// Load visualization data and create chart
-fetch('{% url "predictions:visualization" prediction.pk %}')
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            createPredictionChart(data.data);
-        } else {
-            console.error('Error loading visualization data:', data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+(function () {
+  const bundle = document.getElementById('results-bundle');
+  const loader = document.getElementById('results-bundle-loader');
+  const content = document.getElementById('results-bundle-content');
+  let chartReady = false;
+  let insightsReady = bundle && bundle.dataset.hasInsights === '1';
 
-function createPredictionChart(data) {
-    const ctx = document.getElementById('predictionChart').getContext('2d');
-    
+  function revealIfReady() {
+    if (!chartReady || !insightsReady) return;
+    if (loader) loader.hidden = true;
+    if (content) {
+      content.hidden = false;
+      content.style.opacity = '0';
+      content.style.transition = 'opacity 0.35s ease';
+      requestAnimationFrame(() => { content.style.opacity = '1'; });
+    }
+    if (bundle) bundle.classList.remove('is-loading');
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function listHtml(items, icon) {
+    if (!items || !items.length) return '';
+    return items.map((t) => `<li><i class="fas ${icon}"></i><span>${escapeHtml(t)}</span></li>`).join('');
+  }
+
+  function renderInsights(insights) {
+    if (!insights) return;
+    const summary = document.getElementById('agent-summary');
+    const sections = document.getElementById('agent-sections');
+    if (summary) {
+      summary.className = 'mb-3';
+      summary.textContent = insights.summary || 'Análise indisponível.';
+    }
+    if (sections) {
+      const blocks = [];
+      if (insights.drivers && insights.drivers.length) {
+        blocks.push(`<div class="col-md-4"><div class="mb-1 fw-bold small text-uppercase text-muted">Drivers</div><ul class="ai-insight-list mb-0">${listHtml(insights.drivers, 'fa-arrow-trend-up')}</ul></div>`);
+      }
+      if (insights.risks && insights.risks.length) {
+        blocks.push(`<div class="col-md-4"><div class="mb-1 fw-bold small text-uppercase text-muted">Riscos</div><ul class="ai-insight-list mb-0">${listHtml(insights.risks, 'fa-triangle-exclamation')}</ul></div>`);
+      }
+      if (insights.next_steps && insights.next_steps.length) {
+        blocks.push(`<div class="col-md-4"><div class="mb-1 fw-bold small text-uppercase text-muted">Próximos passos</div><ul class="ai-insight-list mb-0">${listHtml(insights.next_steps, 'fa-circle-check')}</ul></div>`);
+      }
+      sections.innerHTML = blocks.join('');
+    }
+  }
+
+  function ensureInsights() {
+    if (insightsReady) {
+      revealIfReady();
+      return Promise.resolve();
+    }
+    return fetch('{% url "predictions:ensure_insights" prediction.pk %}')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.insights) renderInsights(data.insights);
+        else if (document.getElementById('agent-summary')) {
+          document.getElementById('agent-summary').textContent =
+            'Análise do agente indisponível no momento. O gráfico da previsão está pronto.';
+        }
+        insightsReady = true;
+        revealIfReady();
+      })
+      .catch(() => {
+        if (document.getElementById('agent-summary')) {
+          document.getElementById('agent-summary').textContent =
+            'Não foi possível carregar a análise do agente. O gráfico da previsão está pronto.';
+        }
+        insightsReady = true;
+        revealIfReady();
+      });
+  }
+
+  function createPredictionChart(data) {
+    const canvas = document.getElementById('predictionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [...data.historical.dates, ...data.forecast.dates],
-            datasets: [{
-                label: 'Dados Históricos',
-                data: [...data.historical.values, ...new Array(data.forecast.values.length).fill(null)],
-                borderColor: '#4f46e5',
-                backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                tension: 0.4,
-                fill: true
-            }, {
-                label: 'Previsão',
-                data: [...new Array(data.historical.values.length).fill(null), ...data.forecast.values],
-                borderColor: '#f59e0b',
-                backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                borderDash: [5, 5],
-                tension: 0.4,
-                fill: false
-            }]
+      type: 'line',
+      data: {
+        labels: [...data.historical.dates, ...data.forecast.dates],
+        datasets: [{
+          label: 'Dados Históricos',
+          data: [...data.historical.values, ...new Array(data.forecast.values.length).fill(null)],
+          borderColor: '#4f46e5',
+          backgroundColor: 'rgba(79, 70, 229, 0.1)',
+          tension: 0.4,
+          fill: true
+        }, {
+          label: 'Previsão',
+          data: [...new Array(data.historical.values.length).fill(null), ...data.forecast.values],
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderDash: [5, 5],
+          tension: 0.4,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: { display: true, text: `Previsão com ${data.model_name}` },
+          legend: { display: true, position: 'top' }
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: `Previsão com ${data.model_name}`
-                },
-                legend: {
-                    display: true,
-                    position: 'top'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)'
-                    }
-                },
-                x: {
-                    grid: {
-                        color: 'rgba(0, 0, 0, 0.1)'
-                    }
-                }
-            },
-            elements: {
-                point: {
-                    radius: 3
-                }
-            }
-        }
+        scales: {
+          y: { beginAtZero: false, grid: { color: 'rgba(0, 0, 0, 0.1)' } },
+          x: { grid: { color: 'rgba(0, 0, 0, 0.1)' } }
+        },
+        elements: { point: { radius: 3 } }
+      }
     });
 
-    // Add PNG export button behavior
     const pngBtn = document.createElement('a');
     pngBtn.className = 'btn btn-sm btn-outline-secondary ms-2';
     pngBtn.innerHTML = '<i class="fas fa-image"></i> PNG';
     pngBtn.href = '#';
     pngBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const url = chart.toBase64Image('image/png', 1.0);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'prediction_chart.png';
-        a.click();
+      e.preventDefault();
+      const url = chart.toBase64Image('image/png', 1.0);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'prediction_chart.png';
+      a.click();
     });
-    const headerActions = document.querySelector('.card-header .d-flex > div');
+    const headerActions = document.getElementById('chart-export-actions');
     if (headerActions) headerActions.appendChild(pngBtn);
-}
-{% elif prediction.status == 'training' or prediction.status == 'queued' %}
-// Poll for status updates
-function checkStatus() {
-    fetch('{% url "predictions:status" prediction.pk %}')
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'completed' || data.status === 'failed') {
-                location.reload();
-            } else {
-                const bar = document.getElementById('progressBar');
-                if (bar && data.progress !== undefined) {
-                    bar.style.width = `${data.progress}%`;
-                }
-                setTimeout(checkStatus, 2000);
-            }
-        })
-        .catch(error => {
-            console.error('Error checking status:', error);
-            setTimeout(checkStatus, 5000);
-        });
-}
+  }
 
-// Start polling
-setTimeout(checkStatus, 2000);
+  // Load chart + insights in parallel; reveal only when both are ready
+  const chartPromise = fetch('{% url "predictions:visualization" prediction.pk %}')
+    .then((r) => r.json())
+    .then((data) => {
+      if (!data.success) throw new Error(data.error || 'Falha ao carregar visualização');
+      createPredictionChart(data.data);
+      chartReady = true;
+      revealIfReady();
+    })
+    .catch((err) => {
+      console.error(err);
+      if (loader) {
+        loader.innerHTML = `<div class="card-body text-center py-5 text-danger">Erro ao carregar o gráfico: ${escapeHtml(err.message || err)}</div>`;
+      }
+    });
+
+  Promise.all([chartPromise, ensureInsights()]);
+})();
+{% elif prediction.status == 'training' or prediction.status == 'queued' %}
+(function () {
+  function checkStatus() {
+    fetch('{% url "predictions:status" prediction.pk %}')
+      .then((r) => r.json())
+      .then((data) => {
+        const bar = document.getElementById('progressBar');
+        if (bar && data.progress !== undefined) bar.style.width = `${data.progress}%`;
+        // Reload only when forecast + insights are ready together
+        if (data.ready_for_display || data.status === 'failed') {
+          location.reload();
+          return;
+        }
+        setTimeout(checkStatus, 2000);
+      })
+      .catch(() => setTimeout(checkStatus, 5000));
+  }
+  setTimeout(checkStatus, 1500);
+})();
 {% endif %}
 </script>
 
@@ -501,11 +560,7 @@ setTimeout(checkStatus, 2000);
     padding: 8px 0;
     border-bottom: 1px solid var(--border);
 }
-
-.info-item:last-child {
-    border-bottom: none;
-}
-
+.info-item:last-child { border-bottom: none; }
 .metric-item {
     display: flex;
     justify-content: space-between;
@@ -516,11 +571,7 @@ setTimeout(checkStatus, 2000);
     padding: 8px 0;
     border-bottom: 1px solid var(--border);
 }
-
-.metric-item:last-child {
-    border-bottom: none;
-}
-
+.metric-item:last-child { border-bottom: none; }
 .metric-item .metric-label {
     font-weight: 600;
     color: var(--text);
@@ -528,19 +579,13 @@ setTimeout(checkStatus, 2000);
     text-transform: none;
     letter-spacing: 0;
 }
-
 .metric-item .metric-value {
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--primary);
 }
-
-.progress {
-    background-color: #e9ecef;
-}
-
-.progress-bar {
-    transition: width 0.3s ease;
-}
+.progress { background-color: #e9ecef; }
+.progress-bar { transition: width 0.3s ease; }
+.results-bundle-content[hidden] { display: none !important; }
 </style>
 {% endblock %}
